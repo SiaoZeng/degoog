@@ -1,8 +1,25 @@
-# degoog
+<p align="center">
+  <img src="src/public/images/degoog-logo.png" alt="Degoog Logo" width="100"> 
+  <br />
+  <h1 align="center">degoog</h1><br/>
+</p>
 
 Search aggregator that queries multiple engines and shows results in one place. You can add custom search engines, bang-command plugins, and slot plugins (query-triggered panels above/below results or in the sidebar). News search uses configurable RSS feeds. The dream would be to eventually have a user made marketplace for plugins/engines.
 
 **Still in beta.** Not intended for production use yet.
+
+---
+
+<p align="center">
+  <a href="https://discord.gg/invite/mMuk2WzVZu">
+    <img width="40" src="https://skills.syvixor.com/api/icons?i=discord">
+  </a>
+  <br />
+  <i>Join our discord community</i>
+  <br />
+</p>
+
+---
 
 <div align="center">
   <img width="800" src="screenshots/home.png">
@@ -23,6 +40,13 @@ services:
       - "4444:4444"
     restart: unless-stopped
 ```
+
+<p align="center">
+  <br />
+  <a href="https://www.buymeacoffee.com/fccview">
+    <img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy me a coffee" width="150">
+  </a>
+</p>
 
 ## Documentation
 
