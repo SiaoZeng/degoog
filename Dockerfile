@@ -14,7 +14,6 @@ RUN bun run build:css
 FROM base AS release
 COPY --from=install /app/node_modules ./node_modules
 COPY --from=build /app/src ./src
-COPY --from=build /app/settings.json ./settings.json
 COPY --from=build /app/package.json ./package.json
 
 ENV PORT=4444

@@ -7,9 +7,31 @@ export interface SearchResult {
   duration?: string;
 }
 
+export interface SettingField {
+  key: string;
+  label: string;
+  type: "text" | "password" | "url" | "toggle";
+  required?: boolean;
+  placeholder?: string;
+  description?: string;
+  secret?: boolean;
+}
+
+export interface ExtensionMeta {
+  id: string;
+  displayName: string;
+  description: string;
+  type: "plugin" | "engine";
+  configurable: boolean;
+  settingsSchema: SettingField[];
+  settings: Record<string, string>;
+}
+
 export interface SearchEngine {
   name: string;
   bangShortcut?: string;
+  settingsSchema?: SettingField[];
+  configure?(settings: Record<string, string>): void;
   executeSearch(
     query: string,
     page?: number,
@@ -63,6 +85,9 @@ export interface BangCommand {
   description: string;
   trigger: string;
   aliases?: string[];
+  settingsSchema?: SettingField[];
+  configure?(settings: Record<string, string>): void;
+  isConfigured?(): Promise<boolean>;
   execute(args: string, context?: CommandContext): Promise<CommandResult>;
 }
 

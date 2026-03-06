@@ -15,6 +15,7 @@ export async function performSearch(query, type, page) {
   if (!query.trim()) return;
 
   if (query.trim().startsWith("!")) {
+    state.currentQuery = query;
     return performBangCommand(query, type, page || 1);
   }
 
@@ -39,8 +40,8 @@ export async function performSearch(query, type, page) {
   hideAcDropdown(document.getElementById("ac-dropdown-results"));
   document.getElementById("results-search-input").value = query;
   document.getElementById("results-meta").textContent = "Searching...";
-  document.getElementById("at-a-glance").innerHTML = "";
-  document.getElementById("results-list").innerHTML = '<div class="loading-dots"><span></span><span></span><span></span></div>';
+  document.getElementById("at-a-glance").innerHTML = type === "all" ? skeletonGlance() : "";
+  document.getElementById("results-list").innerHTML = type === "all" ? skeletonResults() : '<div class="loading-dots"><span></span><span></span><span></span></div>';
   document.getElementById("pagination").innerHTML = "";
   document.getElementById("results-sidebar").innerHTML = "";
   document.title = `${query} - degoog`;
@@ -59,8 +60,8 @@ export async function performSearch(query, type, page) {
     document.getElementById("results-meta").textContent = `About ${data.results.length} results (${(data.totalTime / 1000).toFixed(2)} seconds)`;
 
     if (type === "all") {
-      renderAtAGlance(data.atAGlance);
       renderSidebar(data, (q) => performSearch(q));
+      fetchAISummary(query, data.results, data.atAGlance);
     } else {
       document.getElementById("at-a-glance").innerHTML = "";
       document.getElementById("results-sidebar").innerHTML = "";
@@ -94,6 +95,9 @@ async function performBangCommand(query, type, page = 1) {
   try {
     const apiParams = new URLSearchParams({ q: query });
     if (page > 1) apiParams.set("page", String(page));
+    if (state.currentTimeFilter && state.currentTimeFilter !== "any") {
+      apiParams.set("time", state.currentTimeFilter);
+    }
     const res = await fetch(`/api/command?${apiParams.toString()}`);
     if (!res.ok) throw new Error("not found");
     const data = await res.json();
@@ -313,4 +317,69 @@ export async function performLucky(query) {
     params.set(key, String(val));
   }
   window.location.href = `/api/lucky?${params.toString()}`;
+}
+
+function skeletonCard() {
+  return `<div class="skeleton-card">
+    <div class="skeleton-line skeleton-line--url"></div>
+    <div class="skeleton-line skeleton-line--title"></div>
+    <div class="skeleton-line skeleton-line--snippet"></div>
+    <div class="skeleton-line skeleton-line--snippet-short"></div>
+  </div>`;
+}
+
+function skeletonResults(count = 5) {
+  return `<div class="skeleton-results">${Array.from({ length: count }, skeletonCard).join("")}</div>`;
+}
+
+function skeletonGlance() {
+  return `<div class="glance-box">
+    <div class="skeleton-glance">
+      <div class="skeleton-line skeleton-line--title"></div>
+      <div class="skeleton-line skeleton-line--snippet"></div>
+      <div class="skeleton-line skeleton-line--snippet"></div>
+      <div class="skeleton-line skeleton-line--snippet-short"></div>
+    </div>
+  </div>`;
+}
+
+let glanceAbortController = null;
+
+async function fetchAISummary(query, results, fallback) {
+  if (glanceAbortController) glanceAbortController.abort();
+  glanceAbortController = new AbortController();
+  const signal = glanceAbortController.signal;
+
+  try {
+    const res = await fetch("/api/ai/glance", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ query, results }),
+      signal,
+    });
+    if (signal.aborted) return;
+    const data = await res.json();
+    if (signal.aborted) return;
+    if (data.summary) {
+      const container = document.getElementById("at-a-glance");
+      container.innerHTML = `
+        <div class="glance-box glance-ai">
+          <div class="glance-snippet">${escapeHtmlSimple(data.summary)}</div>
+          <span class="glance-ai-badge">AI Summary</span>
+        </div>`;
+    } else {
+      renderAtAGlance(fallback);
+    }
+  } catch (err) {
+    if (err.name === "AbortError") return;
+    renderAtAGlance(fallback);
+  }
+}
+
+function escapeHtmlSimple(str) {
+  return str
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
 }

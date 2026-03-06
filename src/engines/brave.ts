@@ -1,6 +1,5 @@
-import type { SearchEngine, SearchResult, TimeFilter } from "../types";
-
-const BRAVE_API_KEY = process.env.DEGOOG_BRAVE_API_KEY ?? "";
+import type { SearchEngine, SearchResult, TimeFilter, SettingField } from "../types";
+import { getSettings } from "../plugin-settings";
 
 interface BraveApiResult {
   title?: string;
@@ -16,12 +15,29 @@ export class BraveEngine implements SearchEngine {
   name = "Brave Search";
   bangShortcut = "brave";
 
+  settingsSchema: SettingField[] = [
+    {
+      key: "apiKey",
+      label: "API Key",
+      type: "password",
+      secret: true,
+      required: true,
+      placeholder: "Enter your Brave Search API key",
+      description: "Get one at https://api.search.brave.com",
+    },
+  ];
+
+  configure(_settings: Record<string, string>): void {}
+
   async executeSearch(
     query: string,
     page: number = 1,
     timeFilter?: TimeFilter,
   ): Promise<SearchResult[]> {
-    if (!BRAVE_API_KEY) return [];
+    const stored = await getSettings("brave");
+    const apiKey = stored["apiKey"] ?? "";
+    if (!apiKey) return [];
+
     const count = 20;
     const offset = Math.min(page - 1, 9);
     const params = new URLSearchParams({
@@ -42,7 +58,7 @@ export class BraveEngine implements SearchEngine {
     const url = `https://api.search.brave.com/res/v1/web/search?${params.toString()}`;
     const response = await fetch(url, {
       headers: {
-        "X-Subscription-Token": BRAVE_API_KEY,
+        "X-Subscription-Token": apiKey,
         Accept: "application/json",
       },
     });

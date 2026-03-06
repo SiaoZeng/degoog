@@ -1,76 +1,119 @@
-import type { BangCommand, CommandContext, CommandResult } from "../../types";
+import type { BangCommand, CommandContext, CommandResult, SettingField } from "../../types";
+import { getSettings } from "../../plugin-settings";
 
-const JELLYFIN_URL = process.env.DEGOOG_JELLYFIN_URL || "";
-const JELLYFIN_API_KEY = process.env.DEGOOG_JELLYFIN_API_KEY || "";
+export const JELLYFIN_ID = "jellyfin";
+
+export const jellyfinSettingsSchema: SettingField[] = [
+  {
+    key: "url",
+    label: "Jellyfin URL",
+    type: "url",
+    required: true,
+    placeholder: "https://your-jellyfin-server.com",
+    description: "Base URL of your Jellyfin server",
+  },
+  {
+    key: "apiKey",
+    label: "API Key",
+    type: "password",
+    secret: true,
+    required: true,
+    placeholder: "Enter your Jellyfin API key",
+    description: "Found in Jellyfin Dashboard → API Keys",
+  },
+];
+
+function escHtml(s: string): string {
+  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
 
 export const jellyfinCommand: BangCommand = {
   name: "Jellyfin",
   description: "Search your Jellyfin media library",
   trigger: "jellyfin",
   aliases: ["jf"],
+  settingsSchema: jellyfinSettingsSchema,
+
+  configure(_settings: Record<string, string>): void {},
+
+  async isConfigured(): Promise<boolean> {
+    const stored = await getSettings(JELLYFIN_ID);
+    return !!stored["url"];
+  },
+
   async execute(args: string, context?: CommandContext): Promise<CommandResult> {
+    const stored = await getSettings(JELLYFIN_ID);
+    const jellyfinUrl = stored["url"] ?? "";
+    const apiKey = stored["apiKey"] ?? "";
+
+    if (!jellyfinUrl || !apiKey) {
+      return {
+        title: "Jellyfin Search",
+        html: `<div class="command-result"><p>Jellyfin is not configured. Go to <a href="/settings">Settings → Plugins</a> to set up your Jellyfin URL and API key.</p></div>`,
+      };
+    }
+
     if (!args.trim()) {
       return {
         title: "Jellyfin Search",
         html: `<div class="command-result"><p>Usage: <code>!jellyfin &lt;search term&gt;</code></p></div>`,
       };
     }
+
     try {
       const term = args.trim();
       const page = context?.page ?? 1;
       const perPage = 25;
       const startIndex = (page - 1) * perPage;
-      const escHtml = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 
       const [hintsRes, peopleRes] = await Promise.all([
-        fetch(`${JELLYFIN_URL}/Search/Hints?searchTerm=${encodeURIComponent(term)}&api_key=${JELLYFIN_API_KEY}&Limit=${perPage}&StartIndex=${startIndex}&IncludeItemTypes=Movie,Series,Episode,Audio,MusicAlbum,MusicArtist`),
-        fetch(`${JELLYFIN_URL}/Persons?searchTerm=${encodeURIComponent(term)}&api_key=${JELLYFIN_API_KEY}&Limit=5&Fields=Overview,PrimaryImageAspectRatio`),
+        fetch(`${jellyfinUrl}/Search/Hints?searchTerm=${encodeURIComponent(term)}&api_key=${apiKey}&Limit=${perPage}&StartIndex=${startIndex}&IncludeItemTypes=Movie,Series,Episode,Audio,MusicAlbum,MusicArtist`),
+        fetch(`${jellyfinUrl}/Persons?searchTerm=${encodeURIComponent(term)}&api_key=${apiKey}&Limit=5&Fields=Overview,PrimaryImageAspectRatio`),
       ]);
-      const hintsData = await hintsRes.json() as { SearchHints?: any[]; TotalRecordCount?: number };
-      const peopleData = await peopleRes.json();
+      const hintsData = await hintsRes.json() as { SearchHints?: Record<string, unknown>[]; TotalRecordCount?: number };
+      const peopleData = await peopleRes.json() as { Items?: Record<string, unknown>[] };
 
-      const people = (peopleData.Items || []) as any[];
-      const personIds = people.map((p: any) => p.Id);
+      const people = peopleData.Items || [];
+      const personIds = people.map((p) => p["Id"]);
 
-      let personItems: any[] = [];
+      let personItems: Record<string, unknown>[] = [];
       if (personIds.length > 0) {
         const personItemsRes = await fetch(
-          `${JELLYFIN_URL}/Items?PersonIds=${personIds.join(",")}&api_key=${JELLYFIN_API_KEY}&Recursive=true&Limit=30&Fields=Overview,People&IncludeItemTypes=Movie,Series`,
+          `${jellyfinUrl}/Items?PersonIds=${personIds.join(",")}&api_key=${apiKey}&Recursive=true&Limit=30&Fields=Overview,People&IncludeItemTypes=Movie,Series`,
         );
-        const personItemsData = await personItemsRes.json();
+        const personItemsData = await personItemsRes.json() as { Items?: Record<string, unknown>[] };
         personItems = personItemsData.Items || [];
       }
 
       const seen = new Set<string>();
-      const allItems: any[] = [];
+      const allItems: Record<string, unknown>[] = [];
 
       for (const hint of hintsData.SearchHints || []) {
-        if (!seen.has(hint.ItemId)) {
-          seen.add(hint.ItemId);
+        const id = String(hint["ItemId"] || "");
+        if (id && !seen.has(id)) {
+          seen.add(id);
           allItems.push({
-            Id: hint.ItemId,
-            Name: hint.Name,
-            Type: hint.Type,
-            ProductionYear: hint.ProductionYear,
-            Overview: hint.Overview || "",
-            ImageTags: hint.PrimaryImageTag ? { Primary: hint.PrimaryImageTag } : {},
+            Id: id,
+            Name: hint["Name"],
+            Type: hint["Type"],
+            ProductionYear: hint["ProductionYear"],
+            Overview: hint["Overview"] || "",
+            ImageTags: hint["PrimaryImageTag"] ? { Primary: hint["PrimaryImageTag"] } : {},
             MatchedFrom: "search",
           });
         }
       }
 
       for (const item of personItems) {
-        if (!seen.has(item.Id)) {
-          seen.add(item.Id);
-          const matchedPeople = (item.People || [])
-            .filter((p: any) => p.Name?.toLowerCase().includes(term.toLowerCase()))
-            .map((p: any) => `${p.Name} (${p.Type || p.Role || "Cast"})`)
+        const id = String(item["Id"] || "");
+        if (id && !seen.has(id)) {
+          seen.add(id);
+          const itemPeople = (item["People"] as Record<string, unknown>[] | undefined) || [];
+          const matchedPeople = itemPeople
+            .filter((p) => String(p["Name"] || "").toLowerCase().includes(term.toLowerCase()))
+            .map((p) => `${String(p["Name"])} (${String(p["Type"] || p["Role"] || "Cast")})`)
             .slice(0, 3);
-          allItems.push({
-            ...item,
-            MatchedFrom: "person",
-            MatchedPeople: matchedPeople,
-          });
+          allItems.push({ ...item, MatchedFrom: "person", MatchedPeople: matchedPeople });
         }
       }
 
@@ -82,22 +125,25 @@ export const jellyfinCommand: BangCommand = {
       }
 
       const results = allItems
-        .map((item: any) => {
-          const name = escHtml(item.Name || "");
-          const overview = escHtml(item.Overview || "");
-          const year = item.ProductionYear ? ` (${item.ProductionYear})` : "";
-          const typeBadge = `<span class="result-engine-tag">${escHtml(item.Type)}</span>`;
+        .map((item) => {
+          const name = escHtml(String(item["Name"] || ""));
+          const overview = escHtml(String(item["Overview"] || ""));
+          const year = item["ProductionYear"] ? ` (${item["ProductionYear"]})` : "";
+          const typeBadge = `<span class="result-engine-tag">${escHtml(String(item["Type"] || ""))}</span>`;
           const jellyfinTag = `<span class="result-engine-tag">Jellyfin</span>`;
-          const personInfo = item.MatchedPeople?.length
-            ? `<span class="result-engine-tag">${escHtml(item.MatchedPeople.join(", "))}</span>`
+          const matchedPeople = item["MatchedPeople"] as string[] | undefined;
+          const personInfo = matchedPeople?.length
+            ? `<span class="result-engine-tag">${escHtml(matchedPeople.join(", "))}</span>`
             : "";
-          const itemUrl = `${JELLYFIN_URL}/web/index.html#!/details?id=${item.Id}`;
-          const thumbnail = item.ImageTags?.Primary
-            ? `<img class="result-favicon" src="${JELLYFIN_URL}/Items/${item.Id}/Images/Primary?maxHeight=52&api_key=${JELLYFIN_API_KEY}" alt="">`
+          const itemUrl = `${jellyfinUrl}/web/index.html#!/details?id=${item["Id"]}`;
+          const imageTags = item["ImageTags"] as Record<string, unknown> | undefined;
+          const thumbnail = imageTags?.["Primary"]
+            ? `<img class="result-favicon" src="${jellyfinUrl}/Items/${item["Id"]}/Images/Primary?maxHeight=52&api_key=${apiKey}" alt="">`
             : `<img class="result-favicon" src="" alt="">`;
-          return `<div class="result-item"><div class="result-url-row">${thumbnail}<cite class="result-cite">${escHtml(JELLYFIN_URL)}</cite></div><a class="result-title" href="${escHtml(itemUrl)}" target="_blank">${name}${year}</a><p class="result-snippet">${overview}</p><div class="result-engines">${typeBadge}${jellyfinTag}${personInfo}</div></div>`;
+          return `<div class="result-item"><div class="result-url-row">${thumbnail}<cite class="result-cite">${escHtml(jellyfinUrl)}</cite></div><a class="result-title" href="${escHtml(itemUrl)}" target="_blank">${name}${year}</a><p class="result-snippet">${overview}</p><div class="result-engines">${typeBadge}${jellyfinTag}${personInfo}</div></div>`;
         })
         .join("");
+
       const totalHints = hintsData.TotalRecordCount ?? allItems.length;
       const totalPages = Math.ceil(totalHints / perPage);
       const pageInfo = totalPages > 1 ? ` — Page ${page} of ${totalPages}` : "";

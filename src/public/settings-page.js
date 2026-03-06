@@ -1,41 +1,113 @@
-import { idbGet, idbSet } from "./js/db.js";
-import { getEngines, applyToggleStates, getToggleStates, getRegistry, renderEngineToggles } from "./js/engines.js";
-import { SETTINGS_KEY, THEME_KEY } from "./js/constants.js";
-import { applyTheme, initTheme } from "./js/theme.js";
+import { initTheme } from "./js/theme.js";
+import { initGeneralTab } from "./js/settings/general-tab.js";
+import { initEnginesTab } from "./js/settings/engines-tab.js";
+import { initPluginsTab } from "./js/settings/plugins-tab.js";
+import "./js/settings/modal.js";
+
+const TOKEN_KEY = "degoog-settings-token";
+
+function getStoredToken() {
+  return sessionStorage.getItem(TOKEN_KEY) || null;
+}
+
+async function checkAuth() {
+  const token = getStoredToken();
+  const headers = token ? { "x-settings-token": token } : {};
+  const res = await fetch("/api/settings/auth", { headers });
+  return res.json();
+}
+
+function showAuthGate() {
+  const page = document.querySelector(".settings-page");
+  page.innerHTML = `
+    <header class="settings-page-header">
+      <a href="/" class="settings-page-back">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M19 12H5M12 19l-7-7 7-7"/>
+        </svg>
+        Back
+      </a>
+      <h1 class="settings-page-title">Settings</h1>
+    </header>
+    <div class="settings-auth-gate">
+      <p class="settings-auth-desc">Enter the password to access settings.</p>
+      <form class="settings-auth-form" id="settings-auth-form" autocomplete="off">
+        <input
+          class="settings-auth-input"
+          type="password"
+          id="settings-auth-input"
+          placeholder="Password"
+          autocomplete="current-password"
+          autofocus
+        >
+        <button class="settings-save" type="submit">Unlock</button>
+      </form>
+      <p class="settings-auth-error" id="settings-auth-error"></p>
+    </div>`;
+
+  document.getElementById("settings-auth-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const password = document.getElementById("settings-auth-input").value;
+    const errorEl = document.getElementById("settings-auth-error");
+    errorEl.textContent = "";
+    try {
+      const res = await fetch("/api/settings/auth", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password }),
+      });
+      const data = await res.json();
+      if (data.ok && data.token) {
+        sessionStorage.setItem(TOKEN_KEY, data.token);
+        window.location.reload();
+      } else {
+        errorEl.textContent = "Incorrect password.";
+      }
+    } catch {
+      errorEl.textContent = "Something went wrong. Please try again.";
+    }
+  });
+}
+
+function initTabs() {
+  const nav = document.getElementById("settings-tabs-nav");
+  if (!nav) return;
+  nav.querySelectorAll(".settings-tab-btn").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      nav.querySelectorAll(".settings-tab-btn").forEach((b) => b.classList.remove("active"));
+      document.querySelectorAll(".settings-tab-panel").forEach((p) => p.classList.remove("active"));
+      btn.classList.add("active");
+      document.getElementById(`tab-${btn.dataset.tab}`)?.classList.add("active");
+    });
+  });
+}
+
+async function initSettings() {
+  initTheme();
+  initTabs();
+  initGeneralTab();
+
+  try {
+    const res = await fetch("/api/extensions", {
+      headers: getStoredToken() ? { "x-settings-token": getStoredToken() } : {},
+    });
+    const allExtensions = await res.json();
+    await initEnginesTab(allExtensions);
+    initPluginsTab(allExtensions);
+  } catch {
+    document.getElementById("engines-content").innerHTML = "<p>Failed to load extensions.</p>";
+    document.getElementById("plugins-content").innerHTML = "<p>Failed to load extensions.</p>";
+  }
+}
 
 async function init() {
   initTheme();
-  const reg = await getRegistry();
-  renderEngineToggles(reg.engines);
-  const engines = await getEngines();
-  applyToggleStates(engines);
-  const themeSelect = document.getElementById("theme-select");
-  if (themeSelect) {
-    const saved = await idbGet(THEME_KEY);
-    themeSelect.value = saved || "system";
+  const auth = await checkAuth();
+  if (auth.required && !auth.valid) {
+    showAuthGate();
+  } else {
+    initSettings();
   }
-
-  document.getElementById("settings-save").addEventListener("click", async () => {
-    const enginesState = getToggleStates();
-    await idbSet(SETTINGS_KEY, enginesState);
-    if (themeSelect) {
-      await idbSet(THEME_KEY, themeSelect.value);
-      applyTheme(themeSelect.value);
-    }
-    window.location.href = "/";
-  });
-
-  document.getElementById("settings-cache-clear").addEventListener("click", async () => {
-    const btn = document.getElementById("settings-cache-clear");
-    try {
-      await fetch("/api/cache/clear", { method: "POST" });
-      const prev = btn.textContent;
-      btn.textContent = "Cleared";
-      setTimeout(() => { btn.textContent = prev; }, 1500);
-    } catch {
-      btn.textContent = "Failed";
-    }
-  });
 }
 
 init();

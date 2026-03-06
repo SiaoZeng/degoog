@@ -1,6 +1,5 @@
-import type { SearchEngine } from "../types";
-import type { SearchType } from "../types";
-import type { EngineConfig } from "../types";
+import type { SearchEngine, SearchType, EngineConfig, ExtensionMeta } from "../types";
+import { getSettings, maskSecrets } from "../plugin-settings";
 import { GoogleEngine } from "./google";
 import { DuckDuckGoEngine } from "./duckduckgo";
 import { BingEngine } from "./bing";
@@ -41,16 +40,12 @@ const BUILTIN_DEFINITIONS: EngineDefinition[] = [
     searchType: "web",
     EngineClass: BingEngine,
   },
-  ...(process.env.DEGOOG_BRAVE_API_KEY
-    ? [
-      {
-        id: "brave",
-        displayName: "Brave Search",
-        searchType: "web" as const,
-        EngineClass: BraveEngine,
-      },
-    ]
-    : []),
+  {
+    id: "brave",
+    displayName: "Brave Search",
+    searchType: "web" as const,
+    EngineClass: BraveEngine,
+  },
   {
     id: "wikipedia",
     displayName: "Wikipedia",
@@ -177,6 +172,40 @@ export function getDefaultEngineConfig(): Record<string, boolean> {
   return Object.fromEntries(entries.map((e) => [e.id, true]));
 }
 
+export async function getEngineExtensionMeta(): Promise<ExtensionMeta[]> {
+  const allDefs = [
+    ...BUILTIN_DEFINITIONS,
+    ...pluginEntries.map((e) => ({
+      id: e.id,
+      displayName: e.displayName,
+      searchType: e.searchType,
+      instance: e.instance,
+    })),
+  ];
+
+  const engineMap = getEngineMap();
+  const results: ExtensionMeta[] = [];
+
+  for (const def of allDefs) {
+    const instance = engineMap[def.id];
+    const schema = instance?.settingsSchema ?? [];
+    const rawSettings = schema.length > 0 ? await getSettings(def.id) : {};
+    const maskedSettings = maskSecrets(rawSettings, schema);
+
+    results.push({
+      id: def.id,
+      displayName: def.displayName,
+      description: `${def.searchType} search engine`,
+      type: "engine",
+      configurable: schema.length > 0,
+      settingsSchema: schema,
+      settings: maskedSettings,
+    });
+  }
+
+  return results;
+}
+
 function isSearchEngine(val: unknown): val is SearchEngine {
   return (
     typeof val === "object" &&
@@ -188,12 +217,12 @@ function isSearchEngine(val: unknown): val is SearchEngine {
   );
 }
 
-export async function initPlugins(): Promise<void> {
+export async function initEngines(): Promise<void> {
   const { readdir } = await import("fs/promises");
   const { join } = await import("path");
   const { pathToFileURL } = await import("url");
   const pluginDir =
-    process.env.DEGOOG_PLUGINS_DIR ?? join(process.cwd(), "data", "plugins");
+    process.env.DEGOOG_ENGINES_DIR ?? join(process.cwd(), "data", "engines");
   const seen = new Set<string>(BUILTIN_DEFINITIONS.map((d) => d.id));
   pluginEntries = [];
 
@@ -202,7 +231,7 @@ export async function initPlugins(): Promise<void> {
     for (const file of files) {
       if (!/\.(js|ts|mjs|cjs)$/.test(file)) continue;
       const base = file.replace(/\.(js|ts|mjs|cjs)$/, "");
-      const id = `plugin-${base}`;
+      const id = `engine-${base}`;
       if (seen.has(id)) continue;
       seen.add(id);
 
@@ -218,6 +247,10 @@ export async function initPlugins(): Promise<void> {
           mod.type === "images" || mod.type === "videos" || mod.type === "news"
             ? mod.type
             : "web";
+        if (instance.configure && instance.settingsSchema?.length) {
+          const stored = await getSettings(id);
+          if (Object.keys(stored).length > 0) instance.configure(stored);
+        }
         pluginEntries.push({
           id,
           displayName: instance.name,

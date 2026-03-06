@@ -11,18 +11,8 @@ export async function getRegistry() {
   return cachedRegistry;
 }
 
-export const loadEnginesFromFile = async () => {
-  try {
-    const res = await fetch("/settings.json");
-    const data = await res.json();
-    return data.engines || {};
-  } catch {
-    return {};
-  }
-};
-
 export const getEngines = async () => {
-  const saved = (await idbGet(SETTINGS_KEY)) || (await loadEnginesFromFile());
+  const saved = (await idbGet(SETTINGS_KEY)) || {};
   const reg = await getRegistry();
   const merged = {};
   for (const { id } of reg.engines) {

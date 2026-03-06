@@ -1,12 +1,12 @@
 import type { BangCommand, CommandResult } from "../../types";
-import { getCommandRegistry } from "../registry";
+import { getFilteredCommandRegistry } from "../registry";
 
 export const helpCommand: BangCommand = {
   name: "Help",
   description: "List all available bang commands",
   trigger: "help",
   async execute(): Promise<CommandResult> {
-    const commands = getCommandRegistry();
+    const commands = await getFilteredCommandRegistry();
     const rows = commands
       .map((c) => {
         const aliasStr = c.aliases.length > 0

@@ -38,7 +38,6 @@ jobs:
           cp package.json bun.lock* prebuild-release/degoog/
           cd prebuild-release/degoog && bun install --frozen-lockfile --production && cd ../..
           cp -r src prebuild-release/degoog/
-          if [ -f settings.json ]; then cp settings.json prebuild-release/degoog/; fi
 
       - name: Create tarball - tarball is a funny name
         run: |

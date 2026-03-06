@@ -1,0 +1,81 @@
+import { openModal } from "./modal.js";
+
+function escapeHtml(str) {
+  const d = document.createElement("div");
+  d.textContent = str;
+  return d.innerHTML;
+}
+
+function isConfigured(plugin) {
+  return plugin.settingsSchema
+    .filter((f) => f.required)
+    .every((f) => {
+      const v = plugin.settings[f.key];
+      return v && v !== "";
+    });
+}
+
+function renderPluginCard(plugin) {
+  const trigger = plugin.settingsSchema.length === 0
+    ? `<span class="ext-card-trigger">!${escapeHtml(plugin.id)}</span>`
+    : "";
+  const desc = plugin.description
+    ? `<span class="ext-card-desc">${escapeHtml(plugin.description)}</span>`
+    : "";
+  const configured = plugin.configurable && isConfigured(plugin);
+  const badge = configured ? `<span class="ext-configured-badge"></span>` : "";
+  const configureBtn = plugin.configurable
+    ? `<button class="ext-card-configure" data-id="${escapeHtml(plugin.id)}" type="button">Configure</button>`
+    : "";
+
+  return `
+    <div class="ext-card" data-id="${escapeHtml(plugin.id)}">
+      <div class="ext-card-main">
+        <div class="ext-card-info">
+          <span class="ext-card-name">${escapeHtml(plugin.displayName)}</span>
+          ${trigger}
+          ${desc}
+        </div>
+        <div class="ext-card-actions">
+          ${badge}
+          ${configureBtn}
+        </div>
+      </div>
+    </div>`;
+}
+
+export function initPluginsTab(allExtensions) {
+  const container = document.getElementById("plugins-content");
+  if (!container) return;
+
+  const configurable = allExtensions.plugins.filter((p) => p.configurable);
+  const simple = allExtensions.plugins.filter((p) => !p.configurable);
+
+  let html = "";
+
+  if (configurable.length > 0) {
+    html += `<div class="ext-group"><h3 class="ext-group-label">Configurable</h3><div class="ext-cards">`;
+    for (const plugin of configurable) {
+      html += renderPluginCard(plugin);
+    }
+    html += `</div></div>`;
+  }
+
+  if (simple.length > 0) {
+    html += `<div class="ext-group"><h3 class="ext-group-label">Built-in Commands</h3><div class="ext-cards">`;
+    for (const plugin of simple) {
+      html += renderPluginCard(plugin);
+    }
+    html += `</div></div>`;
+  }
+
+  container.innerHTML = html;
+
+  container.querySelectorAll(".ext-card-configure").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const id = btn.dataset.id;
+      const ext = allExtensions.plugins.find((p) => p.id === id);
+      if (ext) openModal(ext);
+    });
+  });
+}

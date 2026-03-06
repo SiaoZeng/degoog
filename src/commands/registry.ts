@@ -1,11 +1,13 @@
-import type { BangCommand } from "../types";
+import type { BangCommand, ExtensionMeta } from "../types";
 import { helpCommand } from "./builtins/help";
 import { uuidCommand } from "./builtins/uuid";
 import { ipCommand } from "./builtins/ip";
 import { speedtestCommand } from "./builtins/speedtest";
-import { jellyfinCommand } from "./builtins/jellyfin";
-import { meilisearchCommand } from "./builtins/meilisearch";
+import { jellyfinCommand, JELLYFIN_ID } from "./builtins/jellyfin";
+import { meilisearchCommand, MEILISEARCH_ID } from "./builtins/meilisearch";
+import { AI_SUMMARY_ID, aiSummarySettingsSchema } from "./builtins/ai-summary";
 import { getEngineMap as getSearchEngineMap } from "../engines/registry";
+import { getSettings, maskSecrets } from "../plugin-settings";
 
 interface CommandEntry {
   id: string;
@@ -19,12 +21,8 @@ const BUILTIN_COMMANDS: CommandEntry[] = [
   { id: "uuid", trigger: "uuid", displayName: "UUID Generator", instance: uuidCommand },
   { id: "ip", trigger: "ip", displayName: "IP Lookup", instance: ipCommand },
   { id: "speedtest", trigger: "speedtest", displayName: "Speed Test", instance: speedtestCommand },
-  ...(process.env.DEGOOG_JELLYFIN_URL
-    ? [{ id: "jellyfin", trigger: "jellyfin", displayName: "Jellyfin", instance: jellyfinCommand }]
-    : []),
-  ...(process.env.DEGOOG_MEILI_URL && process.env.DEGOOG_MEILI_INDEXES
-    ? [{ id: "meilisearch", trigger: "meili", displayName: "Meilisearch", instance: meilisearchCommand }]
-    : []),
+  { id: JELLYFIN_ID, trigger: "jellyfin", displayName: "Jellyfin", instance: jellyfinCommand },
+  { id: MEILISEARCH_ID, trigger: "meili", displayName: "Meilisearch", instance: meilisearchCommand },
 ];
 
 interface PluginCommandEntry {
@@ -60,12 +58,12 @@ function isBangCommand(val: unknown): val is BangCommand {
   );
 }
 
-export async function initCommandPlugins(): Promise<void> {
+export async function initPlugins(): Promise<void> {
   const { readdir, readFile } = await import("fs/promises");
   const { join } = await import("path");
   const { pathToFileURL } = await import("url");
   const commandDir =
-    process.env.DEGOOG_COMMANDS_DIR ?? join(process.cwd(), "data", "commands");
+    process.env.DEGOOG_PLUGINS_DIR ?? join(process.cwd(), "data", "plugins");
   const seen = new Set<string>(BUILTIN_COMMANDS.map((c) => c.trigger));
   pluginCommands = [];
 
@@ -85,7 +83,7 @@ export async function initCommandPlugins(): Promise<void> {
     for (const file of files) {
       if (!/\.(js|ts|mjs|cjs)$/.test(file)) continue;
       const base = file.replace(/\.(js|ts|mjs|cjs)$/, "");
-      const id = `cmd-${base}`;
+      const id = `plugin-${base}`;
 
       try {
         const fullPath = join(commandDir, file);
@@ -97,6 +95,10 @@ export async function initCommandPlugins(): Promise<void> {
         if (!isBangCommand(instance)) continue;
         if (seen.has(instance.trigger)) continue;
         seen.add(instance.trigger);
+        if (instance.configure && instance.settingsSchema?.length) {
+          const stored = await getSettings(id);
+          if (Object.keys(stored).length > 0) instance.configure(stored);
+        }
         pluginCommands.push({
           id,
           trigger: instance.trigger,
@@ -108,6 +110,10 @@ export async function initCommandPlugins(): Promise<void> {
     }
   } catch {
   }
+}
+
+export function getCommandInstanceById(id: string): BangCommand | undefined {
+  return [...BUILTIN_COMMANDS, ...pluginCommands].find((c) => c.id === id)?.instance;
 }
 
 export function getCommandMap(): Map<string, BangCommand> {
@@ -161,6 +167,61 @@ export function getCommandRegistry(): { trigger: string; name: string; descripti
   }
 
   return registry;
+}
+
+export async function getFilteredCommandRegistry(): Promise<{ trigger: string; name: string; description: string; aliases: string[] }[]> {
+  const full = getCommandRegistry();
+  const all = [...BUILTIN_COMMANDS, ...pluginCommands];
+
+  const configuredTriggers = new Set<string>();
+  await Promise.all(
+    all.map(async (entry) => {
+      const configured = entry.instance.isConfigured
+        ? await entry.instance.isConfigured()
+        : true;
+      if (configured) configuredTriggers.add(entry.instance.trigger);
+    }),
+  );
+
+  for (const [shortcut] of getEngineShortcuts()) {
+    configuredTriggers.add(shortcut);
+  }
+
+  return full.filter((c) => configuredTriggers.has(c.trigger));
+}
+
+export async function getPluginExtensionMeta(): Promise<ExtensionMeta[]> {
+  const all = [...BUILTIN_COMMANDS, ...pluginCommands];
+  const results: ExtensionMeta[] = [];
+
+  for (const entry of all) {
+    const schema = entry.instance.settingsSchema ?? [];
+    const rawSettings = schema.length > 0 ? await getSettings(entry.id) : {};
+    const maskedSettings = maskSecrets(rawSettings, schema);
+    results.push({
+      id: entry.id,
+      displayName: entry.displayName,
+      description: entry.instance.description,
+      type: "plugin",
+      configurable: schema.length > 0,
+      settingsSchema: schema,
+      settings: maskedSettings,
+    });
+  }
+
+  const aiRawSettings = await getSettings(AI_SUMMARY_ID);
+  const aiMaskedSettings = maskSecrets(aiRawSettings, aiSummarySettingsSchema);
+  results.push({
+    id: AI_SUMMARY_ID,
+    displayName: "AI Summary",
+    description: "Replaces At a Glance with a brief AI-generated summary using any OpenAI-compatible provider",
+    type: "plugin",
+    configurable: true,
+    settingsSchema: aiSummarySettingsSchema,
+    settings: aiMaskedSettings,
+  });
+
+  return results;
 }
 
 export type BangMatch =

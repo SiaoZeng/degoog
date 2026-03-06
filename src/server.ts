@@ -1,286 +1,31 @@
 import { Hono } from "hono";
 import { serveStatic } from "hono/bun";
-import * as cache from "./cache";
-import { search, searchSingleEngine, mergeNewResults } from "./search";
-import type { EngineConfig, SearchType, TimeFilter } from "./types";
-import { getEngineRegistry, getDefaultEngineConfig, initPlugins } from "./engines/registry";
-import { matchBangCommand, initCommandPlugins, getCommandRegistry } from "./commands/registry";
+import { initEngines } from "./engines/registry";
+import { initPlugins } from "./commands/registry";
+import pagesRouter from "./routes/pages";
+import searchRouter from "./routes/search";
+import commandsRouter from "./routes/commands";
+import suggestRouter from "./routes/suggest";
+import extensionsRouter from "./routes/extensions";
+import settingsAuthRouter from "./routes/settings-auth";
 
 const app = new Hono();
 
-function parseEngineConfig(query: URLSearchParams): EngineConfig {
-  const registry = getEngineRegistry();
-  const config: EngineConfig = {};
-  for (const { id } of registry) {
-    config[id] = query.get(id) !== "false";
-  }
-  return config;
-}
-
-function cacheKey(
-  query: string,
-  engines: EngineConfig,
-  type: SearchType,
-  page: number,
-  timeFilter: TimeFilter = "any",
-): string {
-  const q = query.trim().toLowerCase();
-  return `${q}|${JSON.stringify(engines)}|${type}|${page}|${timeFilter}`;
-}
-
+app.use("/public/*.js", async (c, next) => {
+  await next();
+  c.res.headers.set("Cache-Control", "no-cache");
+});
 app.use("/public/*", serveStatic({ root: "src/" }));
+app.route("/", pagesRouter);
+app.route("/", searchRouter);
+app.route("/", commandsRouter);
+app.route("/", suggestRouter);
+app.route("/", extensionsRouter);
+app.route("/", settingsAuthRouter);
 
-app.get("/", (c) => {
-  const q = c.req.query("q");
-  if (q && q.trim()) {
-    const params = new URLSearchParams(c.req.url.split("?")[1] || "");
-    return c.redirect(`/search?${params.toString()}`, 302);
-  }
-  return c.html(Bun.file("src/public/index.html").text());
-});
+const port = Number(process.env.DEGOOG_PORT) || 4444;
 
-app.get("/search", (c) => {
-  return c.html(Bun.file("src/public/search.html").text());
-});
-
-app.get("/settings", (c) => {
-  return c.html(Bun.file("src/public/settings.html").text());
-});
-
-app.get("/api/engines", (c) => {
-  const registry = getEngineRegistry();
-  const defaults = getDefaultEngineConfig();
-  return c.json({ engines: registry, defaults });
-});
-
-app.get("/settings.json", async (c) => {
-  try {
-    const file = Bun.file("settings.json");
-    const data = await file.json();
-    return c.json(data);
-  } catch {
-    return c.json({ engines: getDefaultEngineConfig() });
-  }
-});
-
-app.get("/api/search", async (c) => {
-  const query = c.req.query("q");
-  if (!query) {
-    return c.json({ error: "Missing query parameter 'q'" }, 400);
-  }
-
-  const engines = parseEngineConfig(new URL(c.req.url).searchParams);
-
-  const searchType = (c.req.query("type") || "all") as SearchType;
-  const pageRaw = c.req.query("page");
-  const page = Math.max(1, Math.min(10, Math.floor(Number(pageRaw)) || 1));
-  const timeFilter = (c.req.query("time") || "any") as TimeFilter;
-  const key = cacheKey(query, engines, searchType, page, timeFilter);
-  const cached = cache.get(key);
-  if (cached) return c.json(cached);
-  const response = await search(query, engines, searchType, page, timeFilter);
-
-  if (cache.hasFailedEngines(response)) {
-    cache.set(key, response, cache.SHORT_TTL_MS);
-  } else {
-    cache.set(key, response);
-  }
-  return c.json(response);
-});
-
-app.get("/api/search/retry", async (c) => {
-  const query = c.req.query("q");
-  const engineName = c.req.query("engine");
-  if (!query || !engineName) {
-    return c.json({ error: "Missing 'q' or 'engine' parameter" }, 400);
-  }
-
-  const engines = parseEngineConfig(new URL(c.req.url).searchParams);
-  const searchType = (c.req.query("type") || "all") as SearchType;
-  const pageRaw = c.req.query("page");
-  const page = Math.max(1, Math.min(10, Math.floor(Number(pageRaw)) || 1));
-  const timeFilter = (c.req.query("time") || "any") as TimeFilter;
-
-  const { results: newResults, timing } = await searchSingleEngine(engineName, query, page, timeFilter);
-
-  const key = cacheKey(query, engines, searchType, page, timeFilter);
-  const cached = cache.get(key);
-
-  if (cached) {
-    const updatedTimings = cached.engineTimings.map((et) =>
-      et.name === engineName ? timing : et
-    );
-    const merged = newResults.length > 0
-      ? mergeNewResults(cached.results, newResults)
-      : cached.results;
-    const updated = {
-      ...cached,
-      results: merged,
-      engineTimings: updatedTimings,
-      atAGlance: merged.length > 0 && merged[0].snippet ? merged[0] : cached.atAGlance,
-    };
-    if (cache.hasFailedEngines(updated)) {
-      cache.set(key, updated, cache.SHORT_TTL_MS);
-    } else {
-      cache.set(key, updated);
-    }
-    return c.json(updated);
-  }
-
-  return c.json({
-    results: newResults.map((r, i) => ({ ...r, score: Math.max(10 - i, 1), sources: [r.source] })),
-    timing,
-    engineTimings: [timing],
-  });
-});
-
-async function getSuggestions(query: string): Promise<string[]> {
-  if (!query.trim()) return [];
-  const encoded = encodeURIComponent(query);
-  const [googleRes, ddgRes] = await Promise.allSettled([
-    fetch(
-      `https://suggestqueries.google.com/complete/search?client=firefox&q=${encoded}`,
-    ).then((r) => r.json()),
-    fetch(`https://duckduckgo.com/ac/?q=${encoded}&type=list`).then((r) =>
-      r.json(),
-    ),
-  ]);
-  const googleSuggestions: string[] =
-    googleRes.status === "fulfilled" ? (googleRes.value as [unknown, string[]])[1] || [] : [];
-  const ddgSuggestions: string[] =
-    ddgRes.status === "fulfilled" ? (ddgRes.value as [unknown, string[]])[1] || [] : [];
-  const seen = new Set<string>();
-  const merged: string[] = [];
-  const lower = query.toLowerCase();
-  for (const s of [...googleSuggestions, ...ddgSuggestions]) {
-    const key = String(s).toLowerCase();
-    if (key !== lower && !seen.has(key)) {
-      seen.add(key);
-      merged.push(String(s));
-    }
-    if (merged.length >= 10) break;
-  }
-  return merged;
-}
-
-function buildOpenSearchXml(origin: string): string {
-  return `<?xml version="1.0" encoding="UTF-8"?>
-<OpenSearchDescription xmlns="http://a9.com/-/spec/opensearch/1.1/">
-  <ShortName>deGoog</ShortName>
-  <Description>deGoog Search</Description>
-  <InputEncoding>UTF-8</InputEncoding>
-  <Image width="16" height="16" type="image/x-icon">${origin}/public/favicon/favicon.ico</Image>
-  <Url type="text/html" template="${origin}/search?q={searchTerms}"/>
-  <Url type="application/x-suggestions+json" template="${origin}/api/suggest/opensearch?q={searchTerms}"/>
-</OpenSearchDescription>`;
-}
-
-app.get("/opensearch.xml", (c) => {
-  const proto = c.req.header("x-forwarded-proto") || new URL(c.req.url).protocol.replace(":", "");
-  const host = c.req.header("x-forwarded-host") || c.req.header("host") || new URL(c.req.url).host;
-  const origin = `${proto}://${host}`;
-  return c.body(buildOpenSearchXml(origin), 200, {
-    "Content-Type": "application/opensearchdescription+xml; charset=utf-8",
-  });
-});
-
-app.get("/api/suggest", async (c) => {
-  const query = c.req.query("q") ?? "";
-  const merged = await getSuggestions(query);
-  return c.json(merged);
-});
-
-app.get("/api/suggest/opensearch", async (c) => {
-  const query = c.req.query("q") ?? "";
-  const suggestions = await getSuggestions(query);
-  return c.json([query, suggestions], 200, {
-    "Content-Type": "application/x-suggestions+json",
-  });
-});
-
-app.get("/api/lucky", async (c) => {
-  const query = c.req.query("q");
-  if (!query) {
-    return c.json({ error: "Missing query parameter 'q'" }, 400);
-  }
-
-  const engines = parseEngineConfig(new URL(c.req.url).searchParams);
-
-  const key = cacheKey(query, engines, "all", 1);
-  let response = cache.get(key);
-  if (!response) {
-    response = await search(query, engines, "all", 1);
-    cache.set(key, response);
-  }
-  if (response.results.length > 0) {
-    return c.redirect(response.results[0].url);
-  }
-  return c.json({ error: "No results found" }, 404);
-});
-
-app.get("/api/commands", (c) => {
-  return c.json(getCommandRegistry());
-});
-
-app.get("/api/command", async (c) => {
-  const q = c.req.query("q");
-  if (!q) {
-    return c.json({ error: "Missing query parameter 'q'" }, 400);
-  }
-  const match = matchBangCommand(q);
-  if (!match) {
-    return c.json({ error: "Unknown command" }, 404);
-  }
-
-  if (match.type === "engine") {
-    if (!match.query.trim()) {
-      return c.json({ error: "Missing search query after engine shortcut" }, 400);
-    }
-    const timeFilter = (c.req.query("time") || "any") as TimeFilter;
-    const pageRaw = c.req.query("page");
-    const page = Math.max(1, Math.min(10, Math.floor(Number(pageRaw)) || 1));
-    const { results, timing } = await searchSingleEngine(match.engineId, match.query, page, timeFilter);
-    return c.json({
-      type: "engine",
-      engineId: match.engineId,
-      results: results.map((r, i) => ({ ...r, score: Math.max(10 - i, 1), sources: [r.source] })),
-      query: match.query,
-      totalTime: timing.time,
-      engineTimings: [timing],
-      relatedSearches: [],
-      knowledgePanel: null,
-      atAGlance: results.length > 0 && results[0].snippet ? { ...results[0], score: 10, sources: [results[0].source] } : null,
-    });
-  }
-
-  const forwarded = c.req.header("x-forwarded-for");
-  const realIp = c.req.header("x-real-ip");
-  const bunIp = (c.env as { requestIP: (req: Request) => { address: string } }).requestIP(c.req.raw)?.address;
-  const clientIp = forwarded ? forwarded.split(",")[0].trim() : realIp || bunIp || undefined;
-  const pageRaw = c.req.query("page");
-  const page = Math.max(1, Math.min(10, Math.floor(Number(pageRaw)) || 1));
-  const result = await match.command.execute(match.args, { clientIp, page });
-  return c.json({
-    type: "command",
-    trigger: match.command.trigger,
-    title: result.title,
-    html: result.html,
-    page,
-    totalPages: result.totalPages ?? 1,
-  });
-});
-
-app.post("/api/cache/clear", (c) => {
-  cache.clear();
-  return c.json({ ok: true });
-});
-
-const port = Number(process.env.PORT) || 4444;
-
-Promise.all([initPlugins(), initCommandPlugins()]).then(() => {
-  Bun.serve({
-    port,
-    fetch: app.fetch,
-  });
+Promise.all([initEngines(), initPlugins()]).then(() => {
+  Bun.serve({ port, fetch: app.fetch });
   console.log(`degoog running on http://localhost:${port}`);
 });

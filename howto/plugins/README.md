@@ -1,13 +1,64 @@
-# Custom search engines
+# Custom bang command plugins
 
-Drop engine modules here to add them to deGoog. Each file must export a **SearchEngine**: an object or class with:
+Drop plugin modules here to add them to deGoog. Each file must export a **BangCommand** object with:
 
-- **`name`** (string) – display name in settings
-- **`executeSearch(query, page?, timeFilter?)`** (async function) – returns `Promise<SearchResult[]>`
+- **`name`** (string) — display name shown in Settings and `!help`
+- **`description`** (string) — short description shown in `!help`
+- **`trigger`** (string) — the word after `!` that activates the command
+- **`execute(args, context?)`** (async function) — returns `Promise<CommandResult>`
 
-**SearchResult** shape: `{ title: string, url: string, snippet: string, source: string, thumbnail?: string }`
+**Optional properties:**
 
-Supported extensions: `.js`, `.ts`, `.mjs`, `.cjs`.  
-Engine id is derived from the filename with a `plugin-` prefix (e.g. `my-engine.js` → id `plugin-my-engine`).
+- **`aliases`** (string[]) — additional triggers for the same command
+- **`settingsSchema`** (SettingField[]) — declares configurable fields; they appear as a card in Settings → Plugins with a Configure modal
+- **`configure(settings)`** (function) — called on startup (if settings exist) and whenever settings are saved in the UI; use it to load config values into local variables
+- **`isConfigured()`** (async function) — return `false` to hide the command from `!help` until required settings are filled in
 
-Create a `./data/plugins` folder on the root of your project or set `DEGOOG_PLUGINS_DIR` to load plugins from another directory.
+---
+
+**CommandResult** shape:
+
+```js
+{ title: string, html: string, totalPages?: number }
+```
+
+**CommandContext** shape:
+
+```js
+{ clientIp?: string, page?: number }
+```
+
+---
+
+**SettingField** shape:
+
+```js
+{
+  key: string,
+  label: string,
+  type: "text" | "password" | "url" | "toggle",
+  required?: boolean,
+  placeholder?: string,
+  description?: string,
+  secret?: boolean, // value is never sent to the browser; stored server-side only
+}
+```
+
+---
+
+## Setup
+
+Create a `./data/plugins` folder at the project root, or set `DEGOOG_PLUGINS_DIR` to load from a different directory.
+
+Supported extensions: `.js`, `.ts`, `.mjs`, `.cjs`.
+
+The plugin id is derived from the filename with a `plugin-` prefix (e.g. `my-plugin.js` → id `plugin-my-plugin`).
+
+## How settings work
+
+1. Declare `settingsSchema` on your plugin — this makes a Configure button appear in Settings → Plugins.
+2. The user fills in and saves the form. The values are stored in `data/plugin-settings.json` server-side.
+3. `configure(settings)` is called immediately after save, and also on every server restart if settings already exist.
+4. Implement `isConfigured()` to return `false` when required settings are missing — this hides the command from `!help` until it is ready.
+
+See `example.js` in this folder for a complete working example.

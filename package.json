@@ -8,7 +8,7 @@
     "build": "bun run build:css",
     "stop": "kill $(lsof -t -i:4444)",
     "start": "bun run src/server.ts",
-    "start:dev": "PORT=4445 bun run src/server.ts --debug",
+    "start:dev": "DEGOOG_PORT=4445 bun run src/server.ts --debug",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
