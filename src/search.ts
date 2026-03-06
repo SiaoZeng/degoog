@@ -14,7 +14,7 @@ import { BingImagesEngine } from "./engines/bing-images";
 import { GoogleImagesEngine } from "./engines/google-images";
 import { BingVideosEngine } from "./engines/bing-videos";
 import { GoogleVideosEngine } from "./engines/google-videos";
-import { BingNewsEngine } from "./engines/bing-news";
+import { searchNews } from "./news-rss";
 
 const MAX_PAGE = 10;
 const ENGINE_TIMEOUT_MS = 10_000;
@@ -27,8 +27,6 @@ const videoEngines: SearchEngine[] = [
   new GoogleVideosEngine(),
   new BingVideosEngine(),
 ];
-const newsEngines: SearchEngine[] = [new BingNewsEngine()];
-
 function normalizeUrl(url: string): string {
   try {
     const parsed = new URL(url);
@@ -126,7 +124,6 @@ function getEnginesForType(
 ): SearchEngine[] {
   if (type === "images") return imageEngines;
   if (type === "videos") return videoEngines;
-  if (type === "news") return newsEngines;
   return [];
 }
 
@@ -216,7 +213,7 @@ export function resolveEngine(engineName: string): SearchEngine | null {
   for (const engine of Object.values(engineMap)) {
     if (engine.name === engineName) return engine;
   }
-  for (const engine of [...imageEngines, ...videoEngines, ...newsEngines]) {
+  for (const engine of [...imageEngines, ...videoEngines]) {
     if (engine.name === engineName) return engine;
   }
   return null;
@@ -265,6 +262,26 @@ export async function search(
 ): Promise<SearchResponse> {
   const start = performance.now();
   const p = Math.max(1, Math.min(MAX_PAGE, Math.floor(page) || 1));
+
+  if (type === "news") {
+    const newsResults = await searchNews(query, p);
+    const totalTime = Math.round(performance.now() - start);
+    const scored = newsResults.map((r, i) => ({
+      ...r,
+      score: Math.max(10 - i, 1),
+      sources: [r.source],
+    }));
+    return {
+      results: scored,
+      atAGlance: null,
+      query,
+      totalTime,
+      type: "news",
+      engineTimings: [{ name: "RSS", time: totalTime, resultCount: scored.length }],
+      relatedSearches: [],
+      knowledgePanel: null,
+    };
+  }
 
   const activeEngines =
     type === "all"

@@ -1,4 +1,4 @@
-import type { BangCommand, ExtensionMeta } from "../types";
+import type { BangCommand, ExtensionMeta, SlotPlugin, SlotPanelPosition } from "../types";
 import { helpCommand } from "./builtins/help";
 import { uuidCommand } from "./builtins/uuid";
 import { ipCommand } from "./builtins/ip";
@@ -202,7 +202,7 @@ export async function getPluginExtensionMeta(): Promise<ExtensionMeta[]> {
       id: entry.id,
       displayName: entry.displayName,
       description: entry.instance.description,
-      type: "plugin",
+      type: "command",
       configurable: schema.length > 0,
       settingsSchema: schema,
       settings: maskedSettings,
@@ -215,7 +215,7 @@ export async function getPluginExtensionMeta(): Promise<ExtensionMeta[]> {
     id: AI_SUMMARY_ID,
     displayName: "AI Summary",
     description: "Replaces At a Glance with a brief AI-generated summary using any OpenAI-compatible provider",
-    type: "plugin",
+    type: "command",
     configurable: true,
     settingsSchema: aiSummarySettingsSchema,
     settings: aiMaskedSettings,

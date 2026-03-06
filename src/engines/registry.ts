@@ -15,8 +15,6 @@ import { GoogleImagesEngine } from "./google-images";
 import { BingImagesEngine } from "./bing-images";
 import { GoogleVideosEngine } from "./google-videos";
 import { BingVideosEngine } from "./bing-videos";
-import { BingNewsEngine } from "./bing-news";
-
 export type EngineSearchType = "web" | "images" | "videos" | "news";
 
 export interface EngineDefinition {
@@ -24,6 +22,7 @@ export interface EngineDefinition {
   displayName: string;
   searchType: EngineSearchType;
   EngineClass: new () => SearchEngine;
+  disabledByDefault?: boolean;
 }
 
 const BUILTIN_DEFINITIONS: EngineDefinition[] = [
@@ -44,6 +43,7 @@ const BUILTIN_DEFINITIONS: EngineDefinition[] = [
     displayName: "Bing",
     searchType: "web",
     EngineClass: BingEngine,
+    disabledByDefault: true,
   },
   {
     id: "brave",
@@ -87,12 +87,6 @@ const BUILTIN_DEFINITIONS: EngineDefinition[] = [
     searchType: "videos",
     EngineClass: BingVideosEngine,
   },
-  {
-    id: "bing-news",
-    displayName: "Bing News",
-    searchType: "news",
-    EngineClass: BingNewsEngine,
-  },
 ];
 
 const webIds = BUILTIN_DEFINITIONS.filter((d) => d.searchType === "web").map(
@@ -110,6 +104,7 @@ const builtinRegistry = BUILTIN_DEFINITIONS.filter(
 ).map((d) => ({
   id: d.id,
   displayName: d.displayName,
+  disabledByDefault: d.disabledByDefault,
 }));
 
 interface PluginEntry {
@@ -117,16 +112,25 @@ interface PluginEntry {
   displayName: string;
   searchType: EngineSearchType;
   instance: SearchEngine;
+  disabledByDefault?: boolean;
 }
 
 let pluginEntries: PluginEntry[] = [];
 
-export function getEngineRegistry(): { id: string; displayName: string }[] {
+export function getEngineRegistry(): {
+  id: string;
+  displayName: string;
+  disabledByDefault?: boolean;
+}[] {
   return [
     ...builtinRegistry,
     ...pluginEntries
       .filter((e) => e.searchType === "web")
-      .map((e) => ({ id: e.id, displayName: e.displayName })),
+      .map((e) => ({
+        id: e.id,
+        displayName: e.displayName,
+        disabledByDefault: e.disabledByDefault,
+      })),
   ];
 }
 
@@ -216,7 +220,9 @@ export function getDefaultEngineConfig(): Record<string, boolean> {
   return Object.fromEntries(
     entries.map((e) => {
       const instance = engineMap[e.id];
-      const disabledByDefault = instance && engineRequiresConfig(instance);
+      const disabledByDefault =
+        instance &&
+        (engineRequiresConfig(instance) || e.disabledByDefault === true);
       return [e.id, !disabledByDefault];
     }),
   );
@@ -236,6 +242,7 @@ export async function getEngineExtensionMeta(): Promise<ExtensionMeta[]> {
   const engineMap = getEngineMap();
   const results: ExtensionMeta[] = [];
 
+  const defaults = getDefaultEngineConfig();
   for (const def of allDefs) {
     const instance = engineMap[def.id];
     const schema = instance?.settingsSchema ?? [];
@@ -250,6 +257,7 @@ export async function getEngineExtensionMeta(): Promise<ExtensionMeta[]> {
       configurable: schema.length > 0,
       settingsSchema: schema,
       settings: maskedSettings,
+      defaultEnabled: defaults[def.id],
     });
   }
 

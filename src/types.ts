@@ -21,10 +21,11 @@ export interface ExtensionMeta {
   id: string;
   displayName: string;
   description: string;
-  type: "plugin" | "engine";
+  type: "plugin" | "engine" | "command";
   configurable: boolean;
   settingsSchema: SettingField[];
   settings: Record<string, string>;
+  defaultEnabled?: boolean;
 }
 
 export interface SearchEngine {
@@ -56,6 +57,15 @@ export interface KnowledgePanel {
   facts?: Record<string, string>;
 }
 
+export type SlotPanelPosition = "above-results" | "below-results" | "sidebar";
+
+export interface SlotPanelResult {
+  id: string;
+  title?: string;
+  html: string;
+  position: SlotPanelPosition;
+}
+
 export interface SearchResponse {
   results: ScoredResult[];
   atAGlance: ScoredResult | null;
@@ -65,6 +75,20 @@ export interface SearchResponse {
   engineTimings: EngineTiming[];
   relatedSearches: string[];
   knowledgePanel: KnowledgePanel | null;
+  slotPanels?: SlotPanelResult[];
+}
+
+export interface SlotPlugin {
+  id: string;
+  name: string;
+  position: SlotPanelPosition;
+  trigger: (query: string) => boolean | Promise<boolean>;
+  execute(
+    query: string,
+    context?: { clientIp?: string },
+  ): Promise<{ title?: string; html: string }>;
+  settingsSchema?: SettingField[];
+  configure?(settings: Record<string, string>): void;
 }
 
 export interface ScoredResult extends SearchResult {

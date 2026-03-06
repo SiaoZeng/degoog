@@ -6,17 +6,29 @@ export class BingEngine implements SearchEngine {
   name = "Bing";
   bangShortcut = "b";
 
-  async executeSearch(query: string, page: number = 1, timeFilter?: TimeFilter): Promise<SearchResult[]> {
+  async executeSearch(
+    query: string,
+    page: number = 1,
+    timeFilter?: TimeFilter,
+  ): Promise<SearchResult[]> {
     const first = (page - 1) * 50;
     let url = `https://www.bing.com/search?q=${encodeURIComponent(query)}&count=50&first=${first}`;
     if (timeFilter && timeFilter !== "any") {
-      const freshMap: Record<string, string> = { hour: "Hour", day: "Day", week: "Week", month: "Month", year: "Year" };
-      if (freshMap[timeFilter]) url += `&filters=ex1%3a"ez5_${freshMap[timeFilter]}_TimeCustom"`;
+      const freshMap: Record<string, string> = {
+        hour: "Hour",
+        day: "Day",
+        week: "Week",
+        month: "Month",
+        year: "Year",
+      };
+      if (freshMap[timeFilter])
+        url += `&filters=ex1%3a"ez5_${freshMap[timeFilter]}_TimeCustom"`;
     }
     const response = await fetch(url, {
       headers: {
         "User-Agent": getRandomUserAgent(),
-        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+        Accept:
+          "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
         "Accept-Language": "en-US,en;q=0.9",
         "Accept-Encoding": "gzip, deflate, br",
         "Sec-Fetch-Dest": "document",
@@ -31,9 +43,8 @@ export class BingEngine implements SearchEngine {
     const $ = cheerio.load(html);
     const results: SearchResult[] = [];
 
-    const resultItems = $("li.b_algo").length > 0
-      ? $("li.b_algo")
-      : $('li[class*="b_algo"]');
+    const resultItems =
+      $("li.b_algo").length > 0 ? $("li.b_algo") : $('li[class*="b_algo"]');
 
     resultItems.each((_, el) => {
       const titleEl = $(el).find("h2 a").first();

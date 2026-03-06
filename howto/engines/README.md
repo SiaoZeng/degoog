@@ -53,13 +53,15 @@ The engine id is derived from the filename with an `engine-` prefix (e.g. `my-en
 To export a non-web search type, add a named `type` export:
 
 ```js
-export const type = "images"; // "images" | "videos" | "news" | "web" (default)
+export const type = "images"; // "images" | "videos" | "web" (default)
 ```
+
+News is not an engine type: the News tab uses RSS feeds configured in **Settings → Engines → News** (stored in `data/plugin-settings.json`).
 
 ## How settings work
 
 1. Declare `settingsSchema` on your engine — this makes a Configure button appear in Settings → Engines.
-2. The user fills in and saves the form. The values are stored in `data/plugin-settings.json` server-side.
+2. The user fills in and saves the form. The values are stored in `data/plugin-settings.json` server-side (along with News RSS feed URLs and other extension settings).
 3. `configure(settings)` is called immediately after save, and also on every server restart if settings already exist.
 4. Return an empty array from `executeSearch` when required settings are missing — the engine will simply contribute no results.
 

@@ -1,6 +1,12 @@
-# Custom bang command plugins
+# Custom plugins (commands and slots)
 
-Drop plugin modules here to add them to deGoog. Each file must export a **BangCommand** object with:
+Plugins live in `data/plugins/` (or `DEGOOG_PLUGINS_DIR`). A module can export a **BangCommand**, a **SlotPlugin**, or both.
+
+---
+
+## Bang command plugins
+
+Drop plugin modules here to add them to deGoog. Each file may export a **BangCommand** object with:
 
 - **`name`** (string) — display name shown in Settings and `!help`
 - **`description`** (string) — short description shown in `!help`
@@ -61,5 +67,24 @@ The plugin id is derived from the filename with a `plugin-` prefix (e.g. `my-plu
 3. `configure(settings)` is called immediately after save, and also on every server restart if settings already exist.
 4. Implement `isConfigured()` to return `false` when required settings are missing — this hides the command from `!help` until it is ready.
 
-See `example.js` in this folder for a complete working example.
-See [data/plugins/weather.js](data/plugins/weather.js) for a fully working drop in weather plugin.
+See [data/plugins/weather.js](data/plugins/weather.js) for a fully working drop-in weather plugin.
+
+Bang commands appear in Settings with type **command**.
+
+---
+
+## Slot plugins
+
+Slot plugins inject panels into the search results page when the query matches. They are **stackable**: if multiple slot plugins match, all their panels are shown. Export a **slot** (or **slotPlugin**) from the same module that may export a BangCommand:
+
+- **`id`** (string) — unique id for the slot
+- **`name`** (string) — display name
+- **`position`** — `"above-results"` | `"below-results"` | `"sidebar"` (where the panel is rendered)
+- **`trigger(query)`** (function) — return true if the slot should show for this query (e.g. keyword or regex match)
+- **`execute(query, context?)`** (async function) — returns `Promise<{ title?: string, html: string }>` (panel content)
+
+Optional: **`settingsSchema`**, **`configure(settings)`** (settings stored under `slot-<id>` in plugin-settings).
+
+See [data/plugins/imdb-slot.js](data/plugins/imdb-slot.js) for a fully working slot imdb plugin.
+
+Slot panels are rendered in three positions: above the results list, below the results list, and in the results sidebar. All positions are available by default.

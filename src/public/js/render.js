@@ -9,6 +9,50 @@ import {
   openMediaPreview,
 } from "./media.js";
 
+const SLOT_IDS = ["slot-above-results", "slot-below-results", "slot-sidebar"];
+
+export function clearSlotPanels() {
+  for (const id of SLOT_IDS) {
+    const el = document.getElementById(id);
+    if (el) el.innerHTML = "";
+  }
+}
+
+function renderSlotPanelsInto(panels, clearFirst) {
+  if (!panels || !Array.isArray(panels) || panels.length === 0) return;
+  if (clearFirst) clearSlotPanels();
+  const byPosition = {
+    "above-results": document.getElementById("slot-above-results"),
+    "below-results": document.getElementById("slot-below-results"),
+    sidebar: document.getElementById("slot-sidebar"),
+  };
+  for (const panel of panels) {
+    const container = byPosition[panel.position];
+    if (!container) continue;
+    const block = document.createElement("div");
+    block.className = "results-slot-panel";
+    if (panel.title) {
+      const titleEl = document.createElement("div");
+      titleEl.className = "results-slot-panel-title";
+      titleEl.textContent = panel.title;
+      block.appendChild(titleEl);
+    }
+    const body = document.createElement("div");
+    body.className = "results-slot-panel-body";
+    body.innerHTML = panel.html;
+    block.appendChild(body);
+    container.appendChild(block);
+  }
+}
+
+export function renderSlotPanels(panels) {
+  renderSlotPanelsInto(panels, true);
+}
+
+export function appendSlotPanels(panels) {
+  renderSlotPanelsInto(panels, false);
+}
+
 export function renderAtAGlance(data) {
   const container = document.getElementById("at-a-glance");
   if (!data) {
@@ -101,7 +145,9 @@ export function renderResults(results) {
 
   if (results.length === 0) {
     container.innerHTML = '<div class="no-results">No results found.</div>';
-    if (state.currentType === "all") renderPagination(MAX_PAGE, state.currentPage);
+    if (state.currentType === "all" || state.currentType === "news") {
+      renderPagination(MAX_PAGE, state.currentPage);
+    }
     return;
   }
 
@@ -122,21 +168,29 @@ export function renderResults(results) {
 
   container.innerHTML = results
     .map(
-      (r) => `
-    <div class="result-item">
+      (r) => {
+        const thumbBlock =
+          r.thumbnail &&
+          `<div class="result-thumbnail-wrap"><img class="result-thumbnail-img" src="${escapeHtml(r.thumbnail)}" alt="" loading="lazy" onerror="this.parentElement.style.display='none'"></div>`;
+        const body = `
       <div class="result-url-row">
         <img class="result-favicon" src="${faviconUrl(r.url)}" alt="" width="26" height="26" onerror="this.style.display='none'">
         <cite class="result-cite">${escapeHtml(cleanUrl(r.url))}</cite>
       </div>
       <a class="result-title" href="${escapeHtml(r.url)}" target="_blank">${escapeHtml(r.title)}</a>
       <p class="result-snippet">${escapeHtml(r.snippet)}</p>
-      <div class="result-engines">${r.sources.map(s => `<span class="result-engine-tag">${escapeHtml(s)}</span>`).join("")}</div>
-    </div>
-  `
+      <div class="result-engines">${r.sources.map((s) => `<span class="result-engine-tag">${escapeHtml(s)}</span>`).join("")}</div>`;
+        if (thumbBlock) {
+          return `<div class="result-item"><div class="result-item-inner"><div class="result-body">${body}</div>${thumbBlock}</div></div>`;
+        }
+        return `<div class="result-item">${body}</div>`;
+      }
     )
     .join("");
 
-  if (state.currentType === "all") renderPagination(MAX_PAGE, state.currentPage);
+  if (state.currentType === "all" || state.currentType === "news") {
+    renderPagination(MAX_PAGE, state.currentPage);
+  }
 }
 
 export const sidebarAccordion = (title, content) =>

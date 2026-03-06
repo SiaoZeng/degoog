@@ -5,6 +5,8 @@
 
 No other files need changes. Settings toggles and API params are derived from the registry.
 
+Optional: set **`disabledByDefault: true`** on the definition to have the engine appear unchecked by default in Settings → Engines (e.g. for beta engines or when the app runs without IndexedDB).
+
 ## Optional: configurable settings
 
 If your engine requires user-provided credentials (e.g. an API key), add a `settingsSchema` property to your class and read values from `plugin-settings.ts` at query time:

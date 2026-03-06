@@ -8,18 +8,39 @@ import {
   renderAtAGlance,
   renderResults,
   renderSidebar,
+  clearSlotPanels,
+  renderSlotPanels,
+  appendSlotPanels,
 } from "./render.js";
 import { hideAcDropdown } from "./autocomplete.js";
 
+function setResultsMeta(metaText, showClearQuery = false) {
+  const el = document.getElementById("results-meta");
+  if (!el) return;
+  if (showClearQuery) {
+    el.innerHTML = "";
+    const span = document.createElement("span");
+    span.textContent = metaText;
+    el.appendChild(span);
+    const btn = document.createElement("a");
+    btn.className = "news-clear-query-btn";
+    btn.textContent = "Clear query and show latest news";
+    btn.addEventListener("click", () => performSearch("", "news"));
+    el.appendChild(btn);
+  } else {
+    el.textContent = metaText;
+  }
+}
+
 export async function performSearch(query, type, page) {
-  if (!query.trim()) return;
+  type = type || state.currentType || "all";
+  if (!query.trim() && type !== "news") return;
 
   if (query.trim().startsWith("!")) {
     state.currentQuery = query;
     return performBangCommand(query, type, page || 1);
   }
 
-  type = type || state.currentType || "all";
   state.currentQuery = query;
   state.currentType = type;
   state.currentPage = 1;
@@ -40,10 +61,12 @@ export async function performSearch(query, type, page) {
   hideAcDropdown(document.getElementById("ac-dropdown-results"));
   document.getElementById("results-search-input").value = query;
   document.getElementById("results-meta").textContent = "Searching...";
+  const useSkeleton = type === "all" || type === "news";
   document.getElementById("at-a-glance").innerHTML = type === "all" ? skeletonGlance() : "";
-  document.getElementById("results-list").innerHTML = type === "all" ? skeletonResults() : '<div class="loading-dots"><span></span><span></span><span></span></div>';
+  document.getElementById("results-list").innerHTML = useSkeleton ? skeletonResults() : '<div class="loading-dots"><span></span><span></span><span></span></div>';
   document.getElementById("pagination").innerHTML = "";
   document.getElementById("results-sidebar").innerHTML = "";
+  clearSlotPanels();
   document.title = `${query} - degoog`;
 
   const urlParams = new URLSearchParams({ q: query });
@@ -57,12 +80,16 @@ export async function performSearch(query, type, page) {
     state.currentResults = data.results;
     state.currentData = data;
 
-    document.getElementById("results-meta").textContent = `About ${data.results.length} results (${(data.totalTime / 1000).toFixed(2)} seconds)`;
+    const metaText = `About ${data.results.length} results (${(data.totalTime / 1000).toFixed(2)} seconds)`;
+    setResultsMeta(metaText, type === "news" && query.trim().length > 0);
 
     if (type === "all") {
       renderSidebar(data, (q) => performSearch(q));
       fetchAISummary(query, data.results, data.atAGlance);
-    } else {
+      renderSlotPanels(data.slotPanels || []);
+      fetchSlotPanels(query);
+    }
+    if (type !== "all") {
       document.getElementById("at-a-glance").innerHTML = "";
       document.getElementById("results-sidebar").innerHTML = "";
     }
@@ -84,6 +111,7 @@ async function performBangCommand(query, type, page = 1) {
   document.getElementById("results-list").innerHTML = '<div class="loading-dots"><span></span><span></span><span></span></div>';
   document.getElementById("pagination").innerHTML = "";
   document.getElementById("results-sidebar").innerHTML = "";
+  clearSlotPanels();
   document.title = `${query} - degoog`;
 
   state.currentBangQuery = query;
@@ -213,7 +241,8 @@ async function runSpeedtest() {
 
 export async function goToPage(pageNum) {
   if (pageNum === state.currentPage) return;
-  document.getElementById("results-list").innerHTML = '<div class="loading-dots"><span></span><span></span><span></span></div>';
+  const useSkeleton = state.currentType === "all" || state.currentType === "news";
+  document.getElementById("results-list").innerHTML = useSkeleton ? skeletonResults() : '<div class="loading-dots"><span></span><span></span><span></span></div>';
   document.getElementById("pagination").innerHTML = "";
   const engines = await getEngines();
   const url = buildSearchUrl(state.currentQuery, engines, state.currentType, pageNum);
@@ -223,9 +252,13 @@ export async function goToPage(pageNum) {
     state.currentResults = data.results;
     state.currentData = data;
     state.currentPage = pageNum;
-    document.getElementById("results-meta").textContent = `About ${state.currentResults.length} results — Page ${state.currentPage}`;
+    const metaText = `About ${state.currentResults.length} results — Page ${state.currentPage}`;
+    setResultsMeta(metaText, state.currentType === "news" && state.currentQuery.trim().length > 0);
     if (state.currentPage === 1 && data.atAGlance) {
       renderAtAGlance(data.atAGlance);
+    }
+    if (state.currentType === "all" && data.slotPanels && data.slotPanels.length > 0) {
+      renderSlotPanels(data.slotPanels);
     }
     renderResults(state.currentResults);
     window.scrollTo(0, 0);
@@ -344,6 +377,17 @@ function skeletonGlance() {
 }
 
 let glanceAbortController = null;
+
+async function fetchSlotPanels(query) {
+  try {
+    const res = await fetch("/api/slots?q=" + encodeURIComponent(query));
+    if (!res.ok) return;
+    const data = await res.json();
+    if (data.panels && data.panels.length > 0) {
+      appendSlotPanels(data.panels);
+    }
+  } catch {}
+}
 
 async function fetchAISummary(query, results, fallback) {
   if (glanceAbortController) glanceAbortController.abort();

@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import { serveStatic } from "hono/bun";
 import { initEngines } from "./engines/registry";
 import { initPlugins } from "./commands/registry";
+import { initSlotPlugins } from "./slots/registry";
 import pagesRouter from "./routes/pages";
 import searchRouter from "./routes/search";
 import commandsRouter from "./routes/commands";
@@ -25,7 +26,7 @@ app.route("/", settingsAuthRouter);
 
 const port = Number(process.env.DEGOOG_PORT) || 4444;
 
-Promise.all([initEngines(), initPlugins()]).then(() => {
+Promise.all([initEngines(), initPlugins(), initSlotPlugins()]).then(() => {
   Bun.serve({ port, fetch: app.fetch });
   console.log(`degoog running on http://localhost:${port}`);
 });

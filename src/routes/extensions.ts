@@ -1,29 +1,61 @@
 import { Hono } from "hono";
 import { getEngineExtensionMeta, getEngineMap } from "../engines/registry";
-import { getPluginExtensionMeta, getCommandInstanceById } from "../commands/registry";
-import { getSettings, setSettings, mergeSecrets } from "../plugin-settings";
-import { generateAISummary, AI_SUMMARY_ID } from "../commands/builtins/ai-summary";
-import type { ScoredResult } from "../types";
+import {
+  getPluginExtensionMeta,
+  getCommandInstanceById,
+} from "../commands/registry";
+import { getSlotPlugins, getSlotPluginById } from "../slots/registry";
+import { getSettings, setSettings, mergeSecrets, maskSecrets } from "../plugin-settings";
+import {
+  generateAISummary,
+  AI_SUMMARY_ID,
+} from "../commands/builtins/ai-summary";
+import { getNewsFeedUrls, setNewsFeedUrls } from "../news-rss";
+import type { ScoredResult, ExtensionMeta } from "../types";
 
 const router = new Hono();
 
+async function getSlotExtensionMeta(): Promise<ExtensionMeta[]> {
+  const slots = getSlotPlugins();
+  const out: ExtensionMeta[] = [];
+  for (const slot of slots) {
+    const schema = slot.settingsSchema ?? [];
+    if (schema.length === 0) continue;
+    const id = `slot-${slot.id}`;
+    const raw = await getSettings(id);
+    const settings = maskSecrets(raw, schema);
+    out.push({
+      id,
+      displayName: slot.name,
+      description: `Shows above results when query matches (e.g. “… cast”).`,
+      type: "plugin",
+      configurable: true,
+      settingsSchema: schema,
+      settings,
+    });
+  }
+  return out;
+}
+
 router.get("/api/extensions", async (c) => {
-  const [engines, plugins] = await Promise.all([
+  const [engines, plugins, slotMeta] = await Promise.all([
     getEngineExtensionMeta(),
     getPluginExtensionMeta(),
+    getSlotExtensionMeta(),
   ]);
-  return c.json({ engines, plugins });
+  return c.json({ engines, plugins: [...plugins, ...slotMeta] });
 });
 
 router.post("/api/extensions/:id/settings", async (c) => {
   const id = c.req.param("id");
   const body = await c.req.json<Record<string, string>>();
 
-  const [engines, plugins] = await Promise.all([
+  const [engines, plugins, slotMeta] = await Promise.all([
     getEngineExtensionMeta(),
     getPluginExtensionMeta(),
+    getSlotExtensionMeta(),
   ]);
-  const ext = [...engines, ...plugins].find((e) => e.id === id);
+  const ext = [...engines, ...plugins, ...slotMeta].find((e) => e.id === id);
 
   if (!ext) {
     return c.json({ error: "Extension not found" }, 404);
@@ -39,6 +71,32 @@ router.post("/api/extensions/:id/settings", async (c) => {
   const commandInstance = getCommandInstanceById(id);
   if (commandInstance?.configure) commandInstance.configure(merged);
 
+  if (id.startsWith("slot-")) {
+    const slotPlugin = getSlotPluginById(id.slice(5));
+    if (slotPlugin?.configure) slotPlugin.configure(merged);
+  }
+
+  return c.json({ ok: true });
+});
+
+router.get("/api/settings/news-feeds", async (c) => {
+  const urls = await getNewsFeedUrls();
+  return c.json({ urls });
+});
+
+router.post("/api/settings/news-feeds", async (c) => {
+  const body = await c.req.json<{ urls?: string[] }>();
+  const urls = Array.isArray(body.urls) ? body.urls : [];
+  const valid = urls.filter((u) => {
+    if (typeof u !== "string") return false;
+    try {
+      new URL(u);
+      return u.startsWith("http");
+    } catch {
+      return false;
+    }
+  });
+  await setNewsFeedUrls(valid);
   return c.json({ ok: true });
 });
 
