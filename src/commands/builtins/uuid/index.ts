@@ -1,4 +1,4 @@
-import type { BangCommand, CommandResult } from "../../types";
+import type { BangCommand, CommandResult } from "../../../types";
 
 export const uuidCommand: BangCommand = {
   name: "UUID Generator",

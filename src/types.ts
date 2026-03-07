@@ -81,6 +81,7 @@ export interface SearchResponse {
 export interface SlotPlugin {
   id: string;
   name: string;
+  description: string;
   position: SlotPanelPosition;
   trigger: (query: string) => boolean | Promise<boolean>;
   execute(
@@ -89,6 +90,7 @@ export interface SlotPlugin {
   ): Promise<{ title?: string; html: string }>;
   settingsSchema?: SettingField[];
   configure?(settings: Record<string, string>): void;
+  init?(context: PluginContext): void | Promise<void>;
 }
 
 export interface ScoredResult extends SearchResult {
@@ -113,10 +115,17 @@ export interface BangCommand {
   settingsSchema?: SettingField[];
   configure?(settings: Record<string, string>): void;
   isConfigured?(): Promise<boolean>;
+  init?(context: PluginContext): void | Promise<void>;
   execute(args: string, context?: CommandContext): Promise<CommandResult>;
 }
 
 export interface CommandContext {
   clientIp?: string;
   page?: number;
+}
+
+export interface PluginContext {
+  dir: string;
+  template: string;
+  readFile: (filename: string) => Promise<string>;
 }

@@ -1,6 +1,6 @@
 # Adding a new built-in command
 
-1. **Create** `src/commands/builtins/<name>.ts` implementing the `BangCommand` interface (`name`, `description`, `trigger`, `execute(args, context?)` returning `Promise<CommandResult>`).
+1. **Create** a folder `src/commands/builtins/<name>/` with an `index.ts` implementing the `BangCommand` interface (`name`, `description`, `trigger`, `execute(args, context?)` returning `Promise<CommandResult>`).
 2. **Register** in `src/commands/registry.ts`: add one entry to `BUILTIN_COMMANDS` with `id`, `trigger`, `displayName`, and your command instance.
 
 No other files need changes. The command automatically appears in `!help` and is available via `!trigger`.
@@ -10,7 +10,7 @@ No other files need changes. The command automatically appears in `!help` and is
 If your command requires user-provided configuration (e.g. a server URL or API key), add a `settingsSchema` and read values from `plugin-settings.ts` at execute time:
 
 ```ts
-import { getSettings } from "../../plugin-settings";
+import { getSettings } from "../../../plugin-settings";
 
 export const MY_COMMAND_ID = "my-command"; // must match id in BUILTIN_COMMANDS
 

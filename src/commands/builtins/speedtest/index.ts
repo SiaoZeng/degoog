@@ -1,4 +1,4 @@
-import type { BangCommand, CommandResult } from "../../types";
+import type { BangCommand, CommandResult } from "../../../types";
 
 export const speedtestCommand: BangCommand = {
   name: "Speed Test",

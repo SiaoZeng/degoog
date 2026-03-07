@@ -41,7 +41,7 @@ export interface RssItem {
   thumbnail?: string;
 }
 
-const CACHE_TTL_MS = 10 * 60 * 1000;
+const CACHE_TTL_MS = 5 * 60 * 1000;
 const CONCURRENCY = 5;
 const MAX_ITEMS_PER_FEED = 50;
 const MAX_CACHE_ENTRIES = 100;
@@ -106,16 +106,36 @@ function parseRssOrAtomInner(
       }
     }
     let thumbnail: string | undefined;
-    const mediaThumb = $el.find("media\\:thumbnail, media\\:content").first();
-    if (mediaThumb.length) {
-      const thumbUrl =
-        mediaThumb.attr("url") ||
-        mediaThumb.attr("thumbnail") ||
-        (mediaThumb.attr("medium") === "image"
-          ? mediaThumb.attr("url")
-          : undefined);
-      if (thumbUrl && thumbUrl.startsWith("http")) thumbnail = thumbUrl;
+
+    const mediaImages = $el.find("media\\:content").filter(function () {
+      return (
+        $(this).attr("medium") === "image" ||
+        /\.(jpe?g|png|webp|gif)/i.test($(this).attr("url") || "")
+      );
+    });
+
+    if (mediaImages.length) {
+      let bestUrl = mediaImages.first().attr("url") || "";
+      let bestWidth =
+        parseInt(mediaImages.first().attr("width") || "0", 10) || 0;
+      mediaImages.each(function () {
+        const w = parseInt($(this).attr("width") || "0", 10) || 0;
+        if (w > bestWidth) {
+          bestWidth = w;
+          bestUrl = $(this).attr("url") || "";
+        }
+      });
+      if (bestUrl && bestUrl.startsWith("http")) thumbnail = bestUrl;
     }
+
+    if (!thumbnail) {
+      const mediaThumb = $el.find("media\\:thumbnail").first();
+      if (mediaThumb.length) {
+        const url = mediaThumb.attr("url");
+        if (url && url.startsWith("http")) thumbnail = url;
+      }
+    }
+
     if (!thumbnail) {
       const enclosure = $el
         .find("enclosure")
@@ -127,6 +147,18 @@ function parseRssOrAtomInner(
       if (enclosure.length) {
         const encUrl = enclosure.attr("url");
         if (encUrl && encUrl.startsWith("http")) thumbnail = encUrl;
+      }
+    }
+
+    if (!thumbnail) {
+      const htmlContent =
+        $el.find("content\\:encoded").first().text() ||
+        $el.find("description").first().text() ||
+        $el.find("content").first().text() ||
+        "";
+      const imgMatch = htmlContent.match(/<img[^>]+src=["']([^"']+)["']/i);
+      if (imgMatch && imgMatch[1] && imgMatch[1].startsWith("http")) {
+        thumbnail = imgMatch[1];
       }
     }
     if (title && link && link.startsWith("http")) {

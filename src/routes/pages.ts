@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import * as cache from "../cache";
 import { getEngineRegistry, getDefaultEngineConfig } from "../engines/registry";
 import { getThemeHtml, getActiveTheme } from "../themes/registry";
+import { getAllPluginCss, getPluginScriptFolders } from "../plugin-assets";
 import pkg from "../../package.json";
 
 const router = new Hono();
@@ -22,6 +23,15 @@ function themeCssPlaceholder(): string {
   const theme = getActiveTheme();
   if (!theme?.manifest.css) return "";
   return '<link rel="stylesheet" href="/theme/style.css">';
+}
+
+function pluginAssetsPlaceholder(): string {
+  const parts: string[] = [];
+  if (getAllPluginCss()) parts.push('<link rel="stylesheet" href="/api/plugins/styles.css">');
+  for (const folder of getPluginScriptFolders()) {
+    parts.push(`<script type="module" src="/plugins/${folder}/script.js"><\/script>`);
+  }
+  return parts.join("\n  ");
 }
 
 router.get("/", async (c) => {
@@ -45,7 +55,9 @@ router.get("/search", async (c) => {
   const override = await getThemeHtml("search");
   if (override) return c.html(override);
   const html = await Bun.file("src/public/search.html").text();
-  const out = html.replace("__THEME_CSS__", themeCssPlaceholder());
+  const out = html
+    .replace("__THEME_CSS__", themeCssPlaceholder())
+    .replace("__PLUGIN_ASSETS__", pluginAssetsPlaceholder());
   return c.html(out);
 });
 router.get("/settings", async (c) => {

@@ -1,5 +1,6 @@
-import type { SlotPlugin, SlotPanelPosition } from "../types";
+import type { SlotPlugin, SlotPanelPosition, PluginContext } from "../types";
 import { getSettings } from "../plugin-settings";
+import { addPluginCss, registerPluginScript } from "../plugin-assets";
 import { debug } from "../logger";
 
 let slotPlugins: SlotPlugin[] = [];
@@ -24,7 +25,7 @@ function isSlotPlugin(val: unknown): val is SlotPlugin {
 }
 
 export async function initSlotPlugins(): Promise<void> {
-  const { readdir } = await import("fs/promises");
+  const { readdir, readFile, stat } = await import("fs/promises");
   const { join } = await import("path");
   const { pathToFileURL } = await import("url");
   const pluginDir =
@@ -32,18 +33,45 @@ export async function initSlotPlugins(): Promise<void> {
   slotPlugins = [];
 
   try {
-    const files = await readdir(pluginDir);
-    for (const file of files) {
-      if (!/\.(js|ts|mjs|cjs)$/.test(file)) continue;
+    const entries = await readdir(pluginDir);
+    for (const entry of entries) {
+      const entryPath = join(pluginDir, entry);
+      const entryStat = await stat(entryPath).catch(() => null);
+      if (!entryStat?.isDirectory()) continue;
+
+      let indexFile: string | undefined;
+      for (const f of ["index.js", "index.ts", "index.mjs", "index.cjs"]) {
+        const s = await stat(join(entryPath, f)).catch(() => null);
+        if (s?.isFile()) { indexFile = f; break; }
+      }
+      if (!indexFile) continue;
+
       try {
-        const fullPath = join(pluginDir, file);
+        const fullPath = join(entryPath, indexFile);
         const url = pathToFileURL(fullPath).href;
         const mod = await import(url);
         const slot = mod.slot ?? mod.slotPlugin ?? mod.default?.slot;
         if (!slot || !isSlotPlugin(slot)) continue;
+
+        const slotSettingsId = `slot-${slot.id}`;
+        const template = await readFile(join(entryPath, "template.html"), "utf-8").catch(() => "");
+        const css = await readFile(join(entryPath, "style.css"), "utf-8").catch(() => "");
+        if (css) addPluginCss(slotSettingsId, css);
+        const hasScript = await stat(join(entryPath, "script.js")).catch(() => null);
+        if (hasScript?.isFile()) registerPluginScript(entry);
+
+        if (slot.init) {
+          const ctx: PluginContext = {
+            dir: entryPath,
+            template,
+            readFile: (filename: string) => readFile(join(entryPath, filename), "utf-8"),
+          };
+          await Promise.resolve(slot.init(ctx));
+        }
+
         if (slot.settingsSchema?.length && slot.configure) {
           try {
-            const stored = await getSettings(`slot-${slot.id}`);
+            const stored = await getSettings(slotSettingsId);
             if (Object.keys(stored).length > 0) slot.configure(stored);
           } catch (err) {
             debug("slots", `Failed to configure slot plugin: ${slot.id}`, err);
@@ -51,7 +79,7 @@ export async function initSlotPlugins(): Promise<void> {
         }
         slotPlugins.push(slot);
       } catch (err) {
-        debug("slots", `Failed to load slot plugin: ${file}`, err);
+        debug("slots", `Failed to load slot plugin: ${entry}`, err);
       }
     }
   } catch (err) {

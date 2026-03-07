@@ -1,13 +1,14 @@
-import type { BangCommand, ExtensionMeta, SlotPlugin, SlotPanelPosition } from "../types";
-import { helpCommand } from "./builtins/help";
-import { uuidCommand } from "./builtins/uuid";
-import { ipCommand } from "./builtins/ip";
-import { speedtestCommand } from "./builtins/speedtest";
-import { jellyfinCommand, JELLYFIN_ID } from "./builtins/jellyfin";
-import { meilisearchCommand, MEILISEARCH_ID } from "./builtins/meilisearch";
-import { AI_SUMMARY_ID, aiSummarySettingsSchema } from "./builtins/ai-summary";
+import type { BangCommand, ExtensionMeta, SlotPlugin, SlotPanelPosition, PluginContext } from "../types";
+import { helpCommand } from "./builtins/help/index";
+import { uuidCommand } from "./builtins/uuid/index";
+import { ipCommand } from "./builtins/ip/index";
+import { speedtestCommand } from "./builtins/speedtest/index";
+import { jellyfinCommand, JELLYFIN_ID } from "./builtins/jellyfin/index";
+import { meilisearchCommand, MEILISEARCH_ID } from "./builtins/meilisearch/index";
+import { AI_SUMMARY_ID, aiSummarySettingsSchema } from "./builtins/ai-summary/index";
 import { getEngineMap as getSearchEngineMap } from "../engines/registry";
 import { getSettings, maskSecrets } from "../plugin-settings";
+import { addPluginCss, registerPluginScript } from "../plugin-assets";
 import { debug } from "../logger";
 
 interface CommandEntry {
@@ -60,7 +61,7 @@ function isBangCommand(val: unknown): val is BangCommand {
 }
 
 export async function initPlugins(): Promise<void> {
-  const { readdir, readFile } = await import("fs/promises");
+  const { readdir, readFile, stat } = await import("fs/promises");
   const { join } = await import("path");
   const { pathToFileURL } = await import("url");
   const commandDir =
@@ -81,14 +82,23 @@ export async function initPlugins(): Promise<void> {
   }
 
   try {
-    const files = await readdir(commandDir);
-    for (const file of files) {
-      if (!/\.(js|ts|mjs|cjs)$/.test(file)) continue;
-      const base = file.replace(/\.(js|ts|mjs|cjs)$/, "");
-      const id = `plugin-${base}`;
+    const entries = await readdir(commandDir);
+    for (const entry of entries) {
+      const entryPath = join(commandDir, entry);
+      const entryStat = await stat(entryPath).catch(() => null);
+      if (!entryStat?.isDirectory()) continue;
+
+      let indexFile: string | undefined;
+      for (const f of ["index.js", "index.ts", "index.mjs", "index.cjs"]) {
+        const s = await stat(join(entryPath, f)).catch(() => null);
+        if (s?.isFile()) { indexFile = f; break; }
+      }
+      if (!indexFile) continue;
+
+      const id = `plugin-${entry}`;
 
       try {
-        const fullPath = join(commandDir, file);
+        const fullPath = join(entryPath, indexFile);
         const url = pathToFileURL(fullPath).href;
         const mod = await import(url);
         const Export = mod.default ?? mod.command ?? mod.Command;
@@ -97,6 +107,22 @@ export async function initPlugins(): Promise<void> {
         if (!isBangCommand(instance)) continue;
         if (seen.has(instance.trigger)) continue;
         seen.add(instance.trigger);
+
+        const template = await readFile(join(entryPath, "template.html"), "utf-8").catch(() => "");
+        const css = await readFile(join(entryPath, "style.css"), "utf-8").catch(() => "");
+        if (css) addPluginCss(id, css);
+        const hasScript = await stat(join(entryPath, "script.js")).catch(() => null);
+        if (hasScript?.isFile()) registerPluginScript(entry);
+
+        if (instance.init) {
+          const ctx: PluginContext = {
+            dir: entryPath,
+            template,
+            readFile: (filename: string) => readFile(join(entryPath, filename), "utf-8"),
+          };
+          await Promise.resolve(instance.init(ctx));
+        }
+
         if (instance.configure && instance.settingsSchema?.length) {
           const stored = await getSettings(id);
           if (Object.keys(stored).length > 0) instance.configure(stored);
@@ -108,7 +134,7 @@ export async function initPlugins(): Promise<void> {
           instance,
         });
       } catch (err) {
-        debug("commands", `Failed to load plugin command: ${file}`, err);
+        debug("commands", `Failed to load plugin command: ${entry}`, err);
       }
     }
   } catch (err) {

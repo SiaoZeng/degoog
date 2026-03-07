@@ -12,6 +12,8 @@ import suggestRouter from "./routes/suggest";
 import extensionsRouter from "./routes/extensions";
 import settingsAuthRouter from "./routes/settings-auth";
 import proxyRouter from "./routes/proxy";
+import pluginAssetsRouter from "./routes/plugin-assets";
+import swRouter from "./routes/sw";
 import pkg from "../package.json";
 
 const app = new Hono();
@@ -29,10 +31,17 @@ app.route("/", extensionsRouter);
 app.route("/", settingsAuthRouter);
 app.route("/", proxyRouter);
 app.route("/", themesRouter);
+app.route("/", pluginAssetsRouter);
+app.route("/", swRouter);
 
 const port = Number(process.env.DEGOOG_PORT) || 4444;
 
-Promise.all([initEngines(), initPlugins(), initSlotPlugins(), initThemes()]).then(() => {
+Promise.all([
+  initEngines(),
+  initPlugins(),
+  initSlotPlugins(),
+  initThemes(),
+]).then(() => {
   Bun.serve({ port, fetch: app.fetch });
   console.log(`degoog v${pkg.version} running on http://localhost:${port}`);
 });

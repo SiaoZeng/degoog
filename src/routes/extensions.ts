@@ -6,11 +6,17 @@ import {
 } from "../commands/registry";
 import { getSlotPlugins, getSlotPluginById } from "../slots/registry";
 import { getThemeExtensionMeta } from "../themes/registry";
-import { getSettings, setSettings, mergeSecrets, maskSecrets } from "../plugin-settings";
+import {
+  getSettings,
+  setSettings,
+  mergeSecrets,
+  maskSecrets,
+} from "../plugin-settings";
 import {
   generateAISummary,
   AI_SUMMARY_ID,
-} from "../commands/builtins/ai-summary";
+} from "../commands/builtins/ai-summary/index";
+import { getAllPluginCss } from "../plugin-assets";
 import type { ScoredResult, ExtensionMeta } from "../types";
 
 const router = new Hono();
@@ -28,7 +34,7 @@ async function getSlotExtensionMeta(): Promise<ExtensionMeta[]> {
     out.push({
       id,
       displayName: slot.name,
-      description: `Shows above results when query matches (e.g. “… cast”).`,
+      description: slot.description,
       type: "plugin",
       configurable: true,
       settingsSchema: schema,
@@ -58,7 +64,9 @@ router.post("/api/extensions/:id/settings", async (c) => {
     getSlotExtensionMeta(),
     getThemeExtensionMeta(),
   ]);
-  const ext = [...engines, ...plugins, ...slotMeta, ...themes].find((e) => e.id === id);
+  const ext = [...engines, ...plugins, ...slotMeta, ...themes].find(
+    (e) => e.id === id,
+  );
 
   if (!ext) {
     return c.json({ error: "Extension not found" }, 404);
@@ -89,6 +97,11 @@ router.post("/api/extensions/:id/settings", async (c) => {
   }
 
   return c.json({ ok: true });
+});
+
+router.get("/api/plugins/styles.css", (c) => {
+  c.header("Content-Type", "text/css");
+  return c.body(getAllPluginCss());
 });
 
 router.post("/api/ai/glance", async (c) => {

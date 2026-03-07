@@ -1,4 +1,4 @@
-import type { BangCommand, CommandResult, CommandContext } from "../../types";
+import type { BangCommand, CommandResult, CommandContext } from "../../../types";
 
 export const ipCommand: BangCommand = {
   name: "IP Lookup",

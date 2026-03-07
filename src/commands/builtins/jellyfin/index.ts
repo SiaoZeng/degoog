@@ -1,5 +1,5 @@
-import type { BangCommand, CommandContext, CommandResult, SettingField } from "../../types";
-import { getSettings } from "../../plugin-settings";
+import type { BangCommand, CommandContext, CommandResult, SettingField } from "../../../types";
+import { getSettings } from "../../../plugin-settings";
 
 export const JELLYFIN_ID = "jellyfin";
 

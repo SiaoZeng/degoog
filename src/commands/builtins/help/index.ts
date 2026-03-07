@@ -1,5 +1,5 @@
-import type { BangCommand, CommandResult } from "../../types";
-import { getFilteredCommandRegistry } from "../registry";
+import type { BangCommand, CommandResult } from "../../../types";
+import { getFilteredCommandRegistry } from "../../registry";
 
 export const helpCommand: BangCommand = {
   name: "Help",

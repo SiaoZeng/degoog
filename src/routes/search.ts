@@ -80,11 +80,12 @@ router.get("/api/search", async (c) => {
     response = cached;
   } else {
     response = await search(query, engines, searchType, page, timeFilter);
-    cache.set(
-      key,
-      response,
-      cache.hasFailedEngines(response) ? cache.SHORT_TTL_MS : undefined,
-    );
+    const ttl = cache.hasFailedEngines(response)
+      ? cache.SHORT_TTL_MS
+      : searchType === "news"
+        ? cache.NEWS_TTL_MS
+        : undefined;
+    cache.set(key, response, ttl);
   }
 
   if (searchType === "all") {

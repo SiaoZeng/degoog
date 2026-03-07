@@ -1,5 +1,5 @@
-import type { SettingField } from "../../types";
-import { getSettings } from "../../plugin-settings";
+import type { SettingField } from "../../../types";
+import { getSettings } from "../../../plugin-settings";
 
 export const AI_SUMMARY_ID = "ai-summary";
 
