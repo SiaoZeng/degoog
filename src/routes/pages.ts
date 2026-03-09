@@ -51,7 +51,8 @@ router.get("/", async (c) => {
   const out = html
     .replaceAll("__APP_VERSION__", pkg.version)
     .replace("__THEME_CSS__", themeCssPlaceholder())
-    .replace("__THEME_ATTRS__", themeAttrs);
+    .replace("__THEME_ATTRS__", themeAttrs)
+    .replace("__PLUGIN_ASSETS__", pluginAssetsPlaceholder());
   return c.html(out);
 });
 
