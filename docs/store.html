@@ -74,9 +74,11 @@
       "version": "1.0.0"
     }
   ],
-  "engines": []
+  "engines": [],
+  "repo-image": "logo.png"
 }</code></pre>
       <ul>
+        <li><strong>repo-image</strong> (optional) — Path to an image file in the repo root (e.g. <code>logo.png</code>) or a full URL. Shown next to your repo in Settings → Store.</li>
         <li><strong>path</strong> — Folder path inside the repo (e.g. <code>plugins/my-plugin</code>).</li>
         <li><strong>name</strong>, <strong>description</strong>, <strong>version</strong> — Shown on the Store card.</li>
         <li><strong>type</strong> (plugins only) — <code>"command"</code>, <code>"slot"</code>, or <code>"searchBar"</code>; optional. Used for Store display so users see what kind of plugin it is.</li>
@@ -103,7 +105,7 @@
         <li>Copy the <strong>clone URL</strong> (e.g. <code>https://github.com/you/my-degoog-repo.git</code>).</li>
         <li>Tell users: <strong>Settings → Store → Add</strong>, then paste the URL.</li>
       </ol>
-      <p>Users add the repo once; they can then install, uninstall, and refresh from the Store.</p>
+      <p>Users add the repo once; they can then install, uninstall, and refresh from the Store. When a user refreshes a repo, any already-installed items are automatically updated to the latest version from the repo.</p>
       <p><strong>Official example:</strong> <a href="https://github.com/fccview/fccview-degoog-extensions" class="external" target="_blank" rel="noopener">fccview-degoog-extensions</a> — clone URL <code>https://github.com/fccview/fccview-degoog-extensions.git</code>. Add it in Settings → Store to install Weather, themes, and other extensions.</p>
     </main>
   </div>

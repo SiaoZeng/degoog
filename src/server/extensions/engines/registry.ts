@@ -18,7 +18,12 @@ import { GoogleVideosEngine } from "./google-videos";
 import { BingVideosEngine } from "./bing-videos";
 import { BraveNewsEngine } from "./brave-news";
 import { BingNewsEngine } from "./bing-news";
-export type EngineSearchType = "web" | "images" | "videos" | "news";
+export type EngineSearchType =
+  | "web"
+  | "images"
+  | "videos"
+  | "news"
+  | (string & {});
 
 export interface EngineDefinition {
   id: string;
@@ -188,6 +193,22 @@ function engineSearchTypeFromSearchType(
   if (type === "all") return "web";
   if (type === "images" || type === "videos" || type === "news") return type;
   return null;
+}
+
+export function getEnginesForCustomType(engineType: string): SearchEngine[] {
+  return pluginEntries
+    .filter((e) => e.searchType === engineType)
+    .map((e) => e.instance);
+}
+
+const BUILTIN_TYPES = new Set(["web", "news", "images", "videos"]);
+
+export function getCustomEngineTypes(): string[] {
+  const types = new Set<string>();
+  for (const e of pluginEntries) {
+    if (!BUILTIN_TYPES.has(e.searchType)) types.add(e.searchType);
+  }
+  return [...types];
 }
 
 function engineRequiresConfig(engine: SearchEngine): boolean {
@@ -377,9 +398,7 @@ export async function initEngines(): Promise<void> {
           typeof Export === "function" ? new Export() : Export;
         if (!isSearchEngine(instance)) continue;
         const searchType =
-          mod.type === "images" || mod.type === "videos" || mod.type === "news"
-            ? mod.type
-            : "web";
+          typeof mod.type === "string" && mod.type.trim() ? mod.type : "web";
         const pluginHosts =
           Array.isArray(mod.outgoingHosts) && mod.outgoingHosts.length > 0
             ? (mod.outgoingHosts as string[])

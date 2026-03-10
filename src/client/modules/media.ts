@@ -6,6 +6,8 @@ import type { ScoredResult } from "../types";
 
 let mediaObserver: IntersectionObserver | null = null;
 let appendMediaCardsRef: ((grid: HTMLElement, results: ScoredResult[], type: "image" | "video") => void) | null = null;
+let currentMediaIdx = -1;
+let currentCardSelector = "";
 
 export function registerAppendMediaCards(
   fn: (grid: HTMLElement, results: ScoredResult[], type: "image" | "video") => void,
@@ -79,6 +81,9 @@ export function openMediaPreview(item: ScoredResult, idx: number, cardSelector: 
   const img = document.getElementById("media-preview-img") as HTMLImageElement | null;
   const info = document.getElementById("media-preview-info");
 
+  currentMediaIdx = idx;
+  currentCardSelector = cardSelector;
+
   if (img) img.src = proxyImageUrl(item.thumbnail || "") || "";
   if (info) {
     info.innerHTML = `
@@ -92,6 +97,68 @@ export function openMediaPreview(item: ScoredResult, idx: number, cardSelector: 
 
   document.querySelectorAll<HTMLElement>(cardSelector).forEach((c) => c.classList.remove("selected"));
   document.querySelector<HTMLElement>(`${cardSelector}[data-idx="${idx}"]`)?.classList.add("selected");
+
+  _updateNavButtons();
+}
+
+function _updateNavButtons(): void {
+  const prevBtn = document.getElementById("media-preview-prev");
+  const nextBtn = document.getElementById("media-preview-next");
+  if (prevBtn) (prevBtn as HTMLButtonElement).disabled = !_findColumnTarget(currentCardSelector, currentMediaIdx, -1);
+  if (nextBtn) (nextBtn as HTMLButtonElement).disabled = !_findColumnTarget(currentCardSelector, currentMediaIdx, 1);
+}
+
+const _visibleCards = (parent: Element, selector: string): HTMLElement[] =>
+  Array.from(parent.querySelectorAll<HTMLElement>(selector)).filter((c) => c.offsetParent !== null);
+
+const _findColumnTarget = (selector: string, idx: number, direction: -1 | 1): HTMLElement | null => {
+  const currentCard = document.querySelector<HTMLElement>(`${selector}[data-idx="${idx}"]`);
+  if (!currentCard) return null;
+
+  const column = currentCard.closest(".image-column, .video-column") as HTMLElement | null;
+  if (!column) {
+    const newIdx = idx + direction;
+    if (newIdx < 0 || newIdx >= state.currentResults.length) return null;
+    return document.querySelector<HTMLElement>(`${selector}[data-idx="${newIdx}"]`);
+  }
+
+  const grid = column.parentElement;
+  if (!grid) return null;
+
+  const columns = Array.from(grid.children) as HTMLElement[];
+  const colIdx = columns.indexOf(column);
+  const cardsInCol = _visibleCards(column, selector);
+  const cardPosInCol = cardsInCol.indexOf(currentCard);
+
+  const nextColIdx = colIdx + direction;
+  if (nextColIdx >= 0 && nextColIdx < columns.length) {
+    const nextCards = _visibleCards(columns[nextColIdx], selector);
+    if (nextCards.length === 0) return null;
+    return nextCards[Math.min(cardPosInCol, nextCards.length - 1)];
+  }
+
+  if (direction === 1) {
+    const firstCards = _visibleCards(columns[0], selector);
+    const target = cardPosInCol + 1;
+    if (target < firstCards.length) return firstCards[target];
+  } else {
+    const lastCards = _visibleCards(columns[columns.length - 1], selector);
+    const target = cardPosInCol - 1;
+    if (target >= 0) return lastCards[target];
+  }
+
+  return null;
+};
+
+export function navigateMediaPreview(direction: -1 | 1): void {
+  const target = _findColumnTarget(currentCardSelector, currentMediaIdx, direction);
+  if (!target) return;
+
+  const newIdx = parseInt(target.dataset.idx!, 10);
+  const item = state.currentResults[newIdx];
+  if (!item) return;
+  openMediaPreview(item, newIdx, currentCardSelector);
+  target.scrollIntoView({ block: "nearest", behavior: "smooth" });
 }
 
 export function closeMediaPreview(): void {
@@ -99,4 +166,5 @@ export function closeMediaPreview(): void {
   document.querySelectorAll<HTMLElement>(".image-card, .video-card").forEach((c) =>
     c.classList.remove("selected"),
   );
+  currentMediaIdx = -1;
 }

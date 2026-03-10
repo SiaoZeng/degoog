@@ -236,22 +236,6 @@
   }
 }
 
-.settings-cache-clear {
-  background: transparent;
-  color: var(--text-secondary);
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  padding: 8px 16px;
-  font-size: $font-size-small;
-  cursor: pointer;
-  font-family: $font-family;
-
-  &:hover {
-    color: var(--text-primary);
-    border-color: var(--border);
-  }
-}
-
 .settings-proxy-toggle-wrap {
   display: flex;
   align-items: center;

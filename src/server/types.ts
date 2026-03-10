@@ -153,6 +153,22 @@ export interface PluginContext {
   readFile: (filename: string) => Promise<string>;
 }
 
+export interface SearchResultTab {
+  id: string;
+  name: string;
+  icon?: string;
+  engineType?: string;
+  settingsId?: string;
+  executeSearch?(
+    query: string,
+    page?: number,
+    context?: { clientIp?: string },
+  ): Promise<{ results: SearchResult[]; totalPages?: number }>;
+  settingsSchema?: SettingField[];
+  configure?(settings: Record<string, string | string[]>): void;
+  init?(context: PluginContext): void | Promise<void>;
+}
+
 export type SearchBarActionType = "navigate" | "bang" | "custom";
 
 export interface SearchBarAction {

@@ -7,6 +7,7 @@ import {
 import { setOutgoingAllowlist } from "./outgoing";
 import { initPlugins } from "./extensions/commands/registry";
 import { initSlotPlugins } from "./extensions/slots/registry";
+import { initSearchResultTabs } from "./extensions/search-result-tabs/registry";
 import { initSearchBarActions } from "./extensions/search-bar/registry";
 import { initPluginRoutes } from "./extensions/plugin-routes/registry";
 import { initMiddlewareRegistry } from "./extensions/middleware/registry";
@@ -53,6 +54,7 @@ Promise.all([
   initEngines(),
   initPlugins(),
   initSlotPlugins(),
+  initSearchResultTabs(),
   initSearchBarActions(),
   initPluginRoutes(),
   initMiddlewareRegistry(),

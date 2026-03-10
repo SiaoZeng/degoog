@@ -198,6 +198,7 @@ export type CommandRegistryEntry = {
   description: string;
   aliases: string[];
   naturalLanguagePhrases?: string[];
+  category?: string;
 };
 
 export function getCommandRegistry(): CommandRegistryEntry[] {
@@ -208,12 +209,14 @@ export function getCommandRegistry(): CommandRegistryEntry[] {
       .filter(([, target]) => target === c.trigger)
       .map(([alias]) => alias);
     const phrases = c.instance.naturalLanguagePhrases;
+    const category = c.id.startsWith("plugin-") ? "Plugins" : "Built-in";
     return {
       id: c.id,
       trigger: c.instance.trigger,
       name: c.instance.name,
       description: c.instance.description,
       aliases: [...builtinAliases, ...extraAliases],
+      category,
       ...(phrases && phrases.length > 0
         ? { naturalLanguagePhrases: phrases }
         : {}),
@@ -228,6 +231,7 @@ export function getCommandRegistry(): CommandRegistryEntry[] {
         name: `${engine.name} only`,
         description: `Search only ${engine.name}`,
         aliases: [],
+        category: "Engine shortcuts",
       });
     }
   }

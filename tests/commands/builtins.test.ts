@@ -21,7 +21,7 @@ describe("commands builtins", () => {
   test("helpCommand.execute returns title and html with command list", async () => {
     const result = await helpCommand.execute("");
     expect(result.title).toBe("Available Commands");
-    expect(result.html).toContain("command-help-table");
+    expect(result.html).toContain("help-container");
     expect(result.html).toContain("!help");
   });
 

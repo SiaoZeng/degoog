@@ -1,12 +1,18 @@
 import { initTheme } from "./modules/theme";
 import { initInstallPrompt } from "./modules/installPrompt";
-import { initGeneralTab } from "./settings/general-tab";
+import { initGeneralTab, initThemeSelectOnly } from "./settings/general-tab";
 import { initEnginesTab } from "./settings/engines-tab";
 import { initPluginsTab } from "./settings/plugins-tab";
 import { initThemesTab } from "./settings/themes-tab";
 import { initStoreTab } from "./settings/store-tab";
 import "./modules/modal/modal";
 import type { AllExtensions } from "./types";
+
+declare global {
+  interface Window {
+    __DEGOOG_PUBLIC_INSTANCE__?: boolean;
+  }
+}
 
 const TOKEN_KEY = "degoog-settings-token";
 
@@ -85,7 +91,7 @@ function _showAuthGate(): void {
     });
 }
 
-function _switchSettingsTab(value: string): void {
+function _switchSettingsTab(value: string, updateUrl = true): void {
   document
     .querySelectorAll<HTMLElement>(".settings-tab-panel")
     .forEach((p) => p.classList.remove("active"));
@@ -97,6 +103,11 @@ function _switchSettingsTab(value: string): void {
     "settings-tab-select",
   ) as HTMLSelectElement | null;
   if (select) select.value = value;
+
+  if (updateUrl) {
+    const path = value === "general" ? "/settings" : `/settings/${value}`;
+    window.history.replaceState({}, "", path);
+  }
 }
 
 function _initTabs(): void {
@@ -110,6 +121,17 @@ function _initTabs(): void {
       _switchSettingsTab(btn.dataset.tab ?? "general"),
     );
   });
+
+  // Load tab from URL path
+  const path = window.location.pathname;
+  const match = path.match(/^\/settings\/(\w+)$/);
+  if (match) {
+    const tab = match[1];
+    const validTabs = ["general", "engines", "plugins", "themes", "store"];
+    if (validTabs.includes(tab)) {
+      _switchSettingsTab(tab, false);
+    }
+  }
 }
 
 async function _initSettings(): Promise<void> {
@@ -157,7 +179,24 @@ window.addEventListener("extensions-saved", async () => {
   } catch {}
 });
 
+async function _initPublicSettings(): Promise<void> {
+  void initTheme();
+  void initThemeSelectOnly();
+  try {
+    const res = await fetch("/api/extensions");
+    const allExtensions = (await res.json()) as AllExtensions;
+    await initEnginesTab(allExtensions, { publicInstance: true });
+  } catch {
+    const enginesEl = document.getElementById("engines-content");
+    if (enginesEl) enginesEl.innerHTML = "<p>Failed to load engines.</p>";
+  }
+}
+
 async function _init(): Promise<void> {
+  if (window.__DEGOOG_PUBLIC_INSTANCE__) {
+    void _initPublicSettings();
+    return;
+  }
   void initTheme();
   const params = new URLSearchParams(window.location.search);
   const tokenFromUrl = params.get("token");

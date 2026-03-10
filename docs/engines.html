@@ -55,7 +55,7 @@
       <pre><code>{
   key: string,
   label: string,
-  type: "text" | "password" | "url" | "toggle" | "textarea",
+  type: "text" | "password" | "url" | "toggle" | "textarea" | "urllist",
   required?: boolean,
   placeholder?: string,
   description?: string,
@@ -65,6 +65,7 @@
       <h2>Non-web search types</h2>
       <p>To export an images or video engine, add a named <code>type</code> export:</p>
       <pre><code>export const type = "images";  // or "videos" or "web" (default)</code></pre>
+      <p>Using a type that does not yet exist (e.g. <code>"books"</code>) creates a <strong>new tab</strong> on the search results page for that type. The tab appears in the tab bar and, when selected, runs all engines that export that type.</p>
 
       <h2>Proxies (proxy-friendly engines)</h2>
       <p>When users enable a proxy for search (Settings → General), all engine requests can go through that proxy. For your engine to be proxy-correct:</p>

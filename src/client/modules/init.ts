@@ -1,4 +1,5 @@
 import { performSearch } from "./search";
+import { performTabSearch } from "./tab-search";
 import { showHome } from "./navigation";
 import { initAutocomplete } from "./autocomplete";
 import { initLuckySlot } from "./luckySlot";
@@ -92,6 +93,10 @@ export function init(): void {
   const page = parseInt(params.get("page") ?? "1", 10) || 1;
   if (q) {
     if (searchInput) searchInput.value = q;
-    void performSearch(q, type, page);
+    if (type.startsWith("tab:")) {
+      void performTabSearch(q, type.slice(4), page);
+    } else {
+      void performSearch(q, type, page);
+    }
   }
 }

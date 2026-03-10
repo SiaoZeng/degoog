@@ -1,10 +1,19 @@
 import { Hono } from "hono";
 import * as cache from "../cache";
 import { search, searchSingleEngine, mergeNewResults } from "../search";
-import { getEngineRegistry } from "../extensions/engines/registry";
+import {
+  getEngineRegistry,
+  getEnginesForCustomType,
+  getCustomEngineTypes,
+} from "../extensions/engines/registry";
 import { getSlotPlugins } from "../extensions/slots/registry";
+import {
+  getSearchResultTabs,
+  getSearchResultTabById,
+} from "../extensions/search-result-tabs/registry";
 import { getSettings } from "../plugin-settings";
 import { getClientIp } from "../utils/request";
+import { outgoingFetch } from "../outgoing";
 import type {
   EngineConfig,
   SearchType,
@@ -215,6 +224,28 @@ router.get("/api/search/retry", async (c) => {
   });
 });
 
+router.post("/api/ai-chat", async (c) => {
+  let body: { messages?: { role: string; content: string }[] };
+  try {
+    body = await c.req.json();
+  } catch {
+    return c.json({ error: "Invalid JSON" }, 400);
+  }
+  if (!Array.isArray(body.messages) || body.messages.length === 0) {
+    return c.json({ error: "Missing messages" }, 400);
+  }
+  const { chatFollowUp } =
+    await import("../extensions/commands/builtins/ai-summary/index");
+  const reply = await chatFollowUp(
+    body.messages as {
+      role: "system" | "user" | "assistant";
+      content: string;
+    }[],
+  );
+  if (!reply) return c.json({ error: "AI request failed" }, 502);
+  return c.json({ reply });
+});
+
 router.get("/api/lucky", async (c) => {
   const query = c.req.query("q");
   if (!query) return c.json({ error: "Missing query parameter 'q'" }, 400);
@@ -228,6 +259,115 @@ router.get("/api/lucky", async (c) => {
   }
   if (response.results.length > 0) return c.redirect(response.results[0].url);
   return c.json({ error: "No results found" }, 404);
+});
+
+router.get("/api/search-tabs", async (c) => {
+  const seen = new Set<string>();
+  const list: { id: string; name: string; icon: string | null }[] = [];
+
+  for (const engineType of getCustomEngineTypes()) {
+    seen.add(engineType);
+    list.push({
+      id: `engine:${engineType}`,
+      name: engineType.charAt(0).toUpperCase() + engineType.slice(1),
+      icon: null,
+    });
+  }
+
+  const tabs = getSearchResultTabs();
+  for (const tab of tabs) {
+    if (tab.engineType && seen.has(tab.engineType)) {
+      const existing = list.find((t) => t.id === `engine:${tab.engineType}`);
+      if (existing) {
+        existing.name = tab.name;
+        existing.icon = tab.icon ?? null;
+        existing.id = tab.id;
+      }
+      continue;
+    }
+    const settingsId = tab.settingsId ?? `tab-${tab.id}`;
+    const tabSettings = await getSettings(settingsId);
+    if (tabSettings["disabled"] === "true") continue;
+    list.push({ id: tab.id, name: tab.name, icon: tab.icon ?? null });
+  }
+  return c.json({ tabs: list });
+});
+
+router.get("/api/tab-search", async (c) => {
+  const tabId = c.req.query("tab");
+  const query = c.req.query("q");
+  if (!tabId || !query?.trim())
+    return c.json({ error: "Missing tab or q" }, 400);
+
+  const page = Math.max(
+    1,
+    Math.min(10, Math.floor(Number(c.req.query("page"))) || 1),
+  );
+  const clientIp = getClientIp(c);
+
+  let engineType: string | undefined;
+  const tab = getSearchResultTabById(tabId);
+
+  if (tabId.startsWith("engine:")) {
+    engineType = tabId.slice(7);
+  } else if (tab?.engineType) {
+    engineType = tab.engineType;
+  } else if (!tab) {
+    return c.json({ error: "Tab not found" }, 404);
+  }
+
+  try {
+    const allResults: ScoredResult[] = [];
+    let totalPages = 1;
+
+    if (engineType) {
+      const engines = getEnginesForCustomType(engineType);
+      const engineContext = { fetch: outgoingFetch };
+      const settled = await Promise.allSettled(
+        engines.map((e) =>
+          e.executeSearch(query.trim(), page, undefined, engineContext),
+        ),
+      );
+      let idx = 0;
+      for (const s of settled) {
+        if (s.status === "fulfilled") {
+          for (const r of s.value) {
+            allResults.push({
+              ...r,
+              score: Math.max(100 - idx, 1),
+              sources: [r.source],
+            });
+            idx++;
+          }
+        }
+      }
+      if (allResults.length > 0) totalPages = 10;
+    }
+
+    if (tab?.executeSearch) {
+      const result = await tab.executeSearch(query.trim(), page, {
+        clientIp: clientIp ?? undefined,
+      });
+      const offset = allResults.length;
+      for (let i = 0; i < result.results.length; i++) {
+        const r = result.results[i];
+        allResults.push({
+          ...r,
+          score: Math.max(100 - offset - i, 1),
+          sources: [r.source],
+        });
+      }
+      if (result.totalPages && result.totalPages > totalPages)
+        totalPages = result.totalPages;
+    }
+
+    return c.json({ results: allResults, totalPages, page });
+  } catch (err) {
+    return c.json(
+      { error: err instanceof Error ? err.message : "Tab search failed" },
+      500,
+    );
+  }
 });
 
 export default router;

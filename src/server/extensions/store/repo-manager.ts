@@ -4,6 +4,7 @@ import { createHash } from "crypto";
 import { removeSettings } from "../../plugin-settings";
 import { reloadCommands } from "../commands/registry";
 import { reloadSlotPlugins } from "../slots/registry";
+import { reloadSearchResultTabs } from "../search-result-tabs/registry";
 import { reloadSearchBarActions } from "../search-bar/registry";
 import { reloadPluginRoutes } from "../plugin-routes/registry";
 import { reloadMiddlewareRegistry } from "../middleware/registry";
@@ -155,6 +156,7 @@ export async function addRepo(url: string): Promise<RepoInfo> {
     name: pkg.name ?? slug,
     description: pkg.description ?? "",
     error: null,
+    repoImage: pkg["repo-image"] ?? null,
   };
   data.repos.push(repoInfo);
   await writeReposData(data);
@@ -255,6 +257,7 @@ export async function refreshRepo(url?: string): Promise<void> {
       const pkg = JSON.parse(raw) as RepoPackageJson;
       repo.name = pkg.name ?? repo.name;
       repo.description = pkg.description ?? repo.description;
+      repo.repoImage = pkg["repo-image"] ?? null;
 
       const updated = await updateInstalledFromRepo(data, repo);
       for (const t of updated) allTypesUpdated.add(t);
@@ -306,6 +309,19 @@ async function listScreenshots(dir: string): Promise<string[]> {
   }
 }
 
+async function inferEngineTypeFromFolder(dir: string): Promise<string | null> {
+  for (const entryFile of ["index.ts", "index.js", "index.mjs", "index.cjs"]) {
+    try {
+      const raw = await readFile(join(dir, entryFile), "utf-8");
+      const match = raw.match(/export\s+const\s+type\s*=\s*["']([^"']+)["']/);
+      if (match?.[1]) return match[1].trim();
+    } catch {
+      //
+    }
+  }
+  return null;
+}
+
 export async function listRepoItems(repoUrl?: string): Promise<StoreItem[]> {
   const data = await readReposData();
   const repos = repoUrl ? [getRepoByUrl(data, repoUrl)] : data.repos;
@@ -345,6 +361,7 @@ export async function listRepoItems(repoUrl?: string): Promise<StoreItem[]> {
         name: string;
         description?: string;
         version?: string;
+        type?: string;
       }>,
     ) => {
       for (const ent of entries) {
@@ -361,7 +378,7 @@ export async function listRepoItems(repoUrl?: string): Promise<StoreItem[]> {
         const key = `${normalizeRepoUrl(repo.url)}::${type}::${itemPath}`;
         const inst = installedMap.get(key);
         const folderName = itemPath.split("/").pop() ?? itemPath;
-        items.push({
+        const item: StoreItem = {
           repoUrl: repo.url,
           repoSlug: repo.localPath,
           repoName: repo.name,
@@ -376,7 +393,17 @@ export async function listRepoItems(repoUrl?: string): Promise<StoreItem[]> {
           screenshots,
           installed: installedSet.has(key),
           installedVersion: inst?.version,
-        });
+        };
+        if (type === "plugin" && ent.type) item.pluginType = ent.type;
+        if (type === "engine") {
+          if (ent.type) item.engineType = ent.type;
+          else {
+            const inferred = await inferEngineTypeFromFolder(fullPath);
+            if (inferred) item.engineType = inferred;
+            else item.engineType = "web";
+          }
+        }
+        items.push(item);
       }
     };
 
@@ -420,6 +447,59 @@ async function copyItemDir(
   }
 }
 
+function _parseDependencyUrl(depUrl: string): { repoUrl: string; type: "plugin" | "theme" | "engine"; itemPath: string } | null {
+  const cleaned = depUrl.replace(/\.git(\/|$)/, "/").replace(/\/$/, "");
+  const typePatterns: Array<{ type: "plugin" | "theme" | "engine"; pattern: RegExp }> = [
+    { type: "plugin", pattern: /^(.+?)\/(plugins\/[^/]+)$/ },
+    { type: "theme", pattern: /^(.+?)\/(themes\/[^/]+)$/ },
+    { type: "engine", pattern: /^(.+?)\/(engines\/[^/]+)$/ },
+  ];
+  for (const { type, pattern } of typePatterns) {
+    const match = cleaned.match(pattern);
+    if (match) {
+      return { repoUrl: match[1], type, itemPath: match[2] };
+    }
+  }
+  return null;
+}
+
+const _installingSet = new Set<string>();
+
+async function _installDependencies(dependencies: string[]): Promise<void> {
+  for (const depUrl of dependencies) {
+    const parsed = _parseDependencyUrl(depUrl);
+    if (!parsed) continue;
+
+    const normalizedPath = parsed.itemPath.replace(/\/$/, "");
+    const depKey = `${normalizeRepoUrl(parsed.repoUrl)}::${parsed.type}::${normalizedPath}`;
+    if (_installingSet.has(depKey)) continue;
+
+    const data = await readReposData();
+    const isInstalled = data.installed.some(
+      (i) =>
+        normalizeRepoUrl(i.repoUrl) === normalizeRepoUrl(parsed.repoUrl) &&
+        i.type === parsed.type &&
+        i.itemPath === normalizedPath,
+    );
+    if (isInstalled) continue;
+
+    let repo = getRepoByUrl(data, parsed.repoUrl);
+    if (!repo) {
+      try {
+        repo = await addRepo(parsed.repoUrl);
+      } catch {
+        continue;
+      }
+    }
+
+    try {
+      await installItem(parsed.repoUrl, parsed.itemPath, parsed.type);
+    } catch {
+      //
+    }
+  }
+}
+
 export async function installItem(
   repoUrl: string,
   itemPath: string,
@@ -430,13 +510,15 @@ export async function installItem(
   if (!repo) throw new Error("Repository not found.");
   const normalizedPath = itemPath.replace(/\/$/, "");
   const key = `${normalizeRepoUrl(repoUrl)}::${type}::${normalizedPath}`;
+  if (_installingSet.has(key)) return;
   if (
     data.installed.some(
       (i) => `${normalizeRepoUrl(i.repoUrl)}::${i.type}::${i.itemPath}` === key,
     )
   ) {
-    throw new Error("Item is already installed.");
+    return;
   }
+  _installingSet.add(key);
   const storeDir = getStoreDir();
   const srcDir = join(storeDir, repo.localPath, normalizedPath);
   try {
@@ -456,6 +538,13 @@ export async function installItem(
     (e) => e.path.replace(/\/$/, "") === normalizedPath,
   );
   if (!manifest) throw new Error("Item not listed in package.json.");
+
+  if (manifest.dependencies?.length) {
+    await _installDependencies(manifest.dependencies);
+  }
+
+  const freshData = await readReposData();
+
   const folderName = normalizedPath.split("/").pop() ?? normalizedPath;
   const destBase = getDestDir(type);
   await mkdir(destBase, { recursive: true });
@@ -470,7 +559,7 @@ export async function installItem(
   }
   await copyItemDir(srcDir, destDir, STORE_METADATA);
   const version = manifest.version ?? "0.0.0";
-  data.installed.push({
+  freshData.installed.push({
     repoUrl: repo.url,
     type,
     itemPath: normalizedPath,
@@ -478,7 +567,8 @@ export async function installItem(
     installedAt: new Date().toISOString(),
     version,
   });
-  await writeReposData(data);
+  await writeReposData(freshData);
+  _installingSet.delete(key);
   await reloadAfterAction(type);
 }
 
@@ -522,6 +612,7 @@ async function reloadAfterAction(
 ): Promise<void> {
   if (type === "plugin") {
     await reloadSlotPlugins();
+    await reloadSearchResultTabs();
     await reloadCommands();
     await reloadSearchBarActions();
     await reloadPluginRoutes();
@@ -646,6 +737,23 @@ export function resolveScreenshotPath(
   const normalized = filename.replace(/[^a-zA-Z0-9._-]/g, "");
   if (normalized !== filename) return null;
   const full = resolve(repoBase, itemPath, "screenshots", filename);
+  const rel = relative(repoBase, full);
+  if (rel.startsWith("..") || rel.includes("..")) return null;
+  return full;
+}
+
+const REPO_ASSET_EXT = /\.(png|jpeg|jpg|gif|webp|svg)$/i;
+
+export function resolveRepoAssetPath(
+  repoSlug: string,
+  relativePath: string,
+): string | null {
+  const storeDir = getStoreDir();
+  const repoBase = resolve(storeDir, repoSlug);
+  const trimmed = relativePath.replace(/^\/+/, "").trim();
+  if (!trimmed || trimmed.includes("..")) return null;
+  if (!REPO_ASSET_EXT.test(trimmed)) return null;
+  const full = resolve(repoBase, trimmed);
   const rel = relative(repoBase, full);
   if (rel.startsWith("..") || rel.includes("..")) return null;
   return full;

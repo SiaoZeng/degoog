@@ -1,5 +1,6 @@
 @import "variables";
 @import "mixins";
+@import "components/buttons";
 @import "components/header";
 @import "components/logo";
 @import "components/search-bar";
@@ -11,8 +12,6 @@
 @import "components/sidebar";
 @import "components/media";
 @import "components/commands";
-
-@import "components/install-banner";
 @import "components/store";
 
 *,

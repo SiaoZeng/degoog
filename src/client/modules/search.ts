@@ -1,5 +1,5 @@
 import { state } from "../state";
-import { MAX_PAGE } from "../constants";
+import { MAX_PAGE, BUILTIN_SEARCH_TYPES } from "../constants";
 import { showResults, setActiveTab } from "./navigation";
 import { getEngines } from "./engines";
 import { buildSearchUrl } from "../utils/url";
@@ -37,6 +37,28 @@ const _fetchCommands = async (): Promise<Command[]> => {
 export async function performSearch(query: string, type?: string, page?: number): Promise<void> {
   const resolvedType = type || state.currentType || "all";
   if (!query.trim()) return;
+
+  if (resolvedType.startsWith("tab:")) {
+    const { performTabSearch } = await import("./tab-search");
+    return performTabSearch(query, resolvedType.slice(4), page);
+  }
+
+  const prefixMatch = query.trim().match(/^(\w+):(.+)$/);
+  if (prefixMatch && !query.trim().startsWith("http")) {
+    const prefix = prefixMatch[1].toLowerCase();
+    const actualQuery = prefixMatch[2].trim();
+    if (actualQuery) {
+      if (prefix !== "all" && BUILTIN_SEARCH_TYPES.has(prefix)) {
+        return performSearch(actualQuery, prefix, page);
+      }
+      const { getPluginTabIds } = await import("./tabs");
+      const knownTypes = await getPluginTabIds();
+      if (knownTypes.has(prefix)) {
+        const { performTabSearch } = await import("./tab-search");
+        return performTabSearch(actualQuery, `engine:${prefix}`, page);
+      }
+    }
+  }
 
   if (query.trim().startsWith("!")) {
     state.currentQuery = query;

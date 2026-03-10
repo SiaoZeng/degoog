@@ -7,8 +7,11 @@ const OFFICIAL_REPO_URL =
 
 interface RepoInfo {
   url: string;
+  localPath: string;
   lastFetched: string;
+  name: string;
   error?: string;
+  repoImage?: string | null;
 }
 
 interface StoreItem {
@@ -23,6 +26,8 @@ interface StoreItem {
   installed: boolean;
   screenshots: string[];
   author?: { name: string; url?: string };
+  pluginType?: string;
+  engineType?: string;
 }
 
 const _normalizeRepoUrl = (url: string): string => {
@@ -45,6 +50,31 @@ const _formatRelativeTime = (iso: string): string => {
   }
 };
 
+function repoImageSrc(repo: RepoInfo, getToken: () => string | null): string {
+  const img = repo.repoImage;
+  if (!img) return "";
+  if (/^https?:\/\//i.test(img)) return img;
+  const token = getToken();
+  const q = token ? `&token=${encodeURIComponent(token)}` : "";
+  return `/api/store/repos/${encodeURIComponent(repo.localPath)}/asset?path=${encodeURIComponent(img)}${q}`;
+}
+
+function pluginTypeLabel(t: string): string {
+  if (t === "command") return "Bang";
+  if (t === "slot") return "Slot";
+  if (t === "search-result-tab") return "Search tab";
+  if (t === "searchBarAction") return "Search bar";
+  return t.charAt(0).toUpperCase() + t.slice(1).replace(/-/g, " ");
+}
+
+function engineTypeLabel(t: string): string {
+  if (t === "web") return "Web";
+  if (t === "images") return "Images";
+  if (t === "videos") return "Videos";
+  if (t === "news") return "News";
+  return t.charAt(0).toUpperCase() + t.slice(1);
+}
+
 const _renderRepoList = (
   repos: RepoInfo[],
   getToken: () => string | null,
@@ -53,7 +83,7 @@ const _renderRepoList = (
   if (!repos.length) {
     return '<p class="store-empty">No repositories added. Add a git repository URL to browse its plugins, themes, and engines.</p>';
   }
-  let html = '<ul class="store-repo-list">';
+  let html = '<div class="store-repo-list">';
   for (const repo of repos) {
     const err = repo.error
       ? `<span class="store-repo-error">${escapeHtml(repo.error)}</span>`
@@ -62,28 +92,36 @@ const _renderRepoList = (
       _normalizeRepoUrl(repo.url) === _normalizeRepoUrl(OFFICIAL_REPO_URL);
     const removeBtn = isOfficial
       ? ""
-      : `<button class="store-btn store-btn-remove" type="button" data-url="${escapeHtml(repo.url)}">Remove</button>`;
+      : `<button class="btn btn--danger store-btn-remove" type="button" data-url="${escapeHtml(repo.url)}">Remove</button>`;
     const normUrl = _normalizeRepoUrl(repo.url);
     const behind = statusByUrl[normUrl] ?? statusByUrl[repo.url] ?? 0;
     const updatesNote =
       behind > 0
-        ? `<span class="store-repo-updates-note" title="Refresh to get latest">${escapeHtml(String(behind))} update${behind !== 1 ? "s" : ""} available — refresh to get latest</span>`
+        ? `<span class="store-repo-updates-note" title="Refresh to get latest">${escapeHtml(String(behind))} update${behind !== 1 ? "s" : ""} available</span>`
         : "";
+    const imgSrc = repoImageSrc(repo, getToken);
+    const imgHtml = imgSrc
+      ? `<img src="${escapeHtml(imgSrc)}" alt="" class="store-repo-img" loading="lazy">`
+      : '<div class="store-repo-img store-repo-img-placeholder"></div>';
     html += `
-      <li class="store-repo-item" data-url="${escapeHtml(repo.url)}">
-        <div class="store-repo-url">${escapeHtml(repo.url)}</div>
-        <div class="store-repo-meta">
-          Last updated: ${escapeHtml(_formatRelativeTime(repo.lastFetched))}
-          ${err}
-          ${updatesNote}
+      <div class="store-repo-item" data-url="${escapeHtml(repo.url)}">
+        <div class="store-repo-item-media">${imgHtml}</div>
+        <div class="store-repo-item-body">
+          <div class="store-repo-name">${escapeHtml(repo.name || repo.url)}</div>
+          <a href="${escapeHtml(repo.url.replace(/\.git$/, ""))}" target="_blank" rel="noopener" class="store-repo-url">${escapeHtml(repo.url)}</a>
+          <div class="store-repo-meta">
+            ${escapeHtml(_formatRelativeTime(repo.lastFetched))}
+            ${err}
+            ${updatesNote}
+          </div>
+          <div class="store-repo-actions">
+            <button class="btn store-btn-refresh" type="button" data-url="${escapeHtml(repo.url)}">Refresh</button>
+            ${removeBtn}
+          </div>
         </div>
-        <div class="store-repo-actions">
-          <button class="store-btn store-btn-refresh" type="button" data-url="${escapeHtml(repo.url)}">Refresh</button>
-          ${removeBtn}
-        </div>
-      </li>`;
+      </div>`;
   }
-  html += "</ul>";
+  html += "</div>";
   return html;
 };
 
@@ -126,11 +164,17 @@ const _renderItemCard = (
       : item.type === "theme"
         ? "Theme"
         : "Engine";
+  const subLabel =
+    item.type === "plugin" && item.pluginType
+      ? pluginTypeLabel(item.pluginType)
+      : item.type === "engine" && item.engineType
+        ? engineTypeLabel(item.engineType)
+        : "";
   const btn = item.installed
-    ? `<span class="ext-configured-badge"></span><button class="store-btn store-btn-uninstall" type="button" data-repo-url="${escapeHtml(item.repoUrl)}" data-item-path="${escapeHtml(item.path)}" data-type="${escapeHtml(item.type)}">Uninstall</button>`
-    : `<button class="store-btn store-btn-install" type="button" data-repo-url="${escapeHtml(item.repoUrl)}" data-item-path="${escapeHtml(item.path)}" data-type="${escapeHtml(item.type)}">Install</button>`;
+    ? `<span class="ext-configured-badge"></span><button class="btn--secondary" type="button" data-repo-url="${escapeHtml(item.repoUrl)}" data-item-path="${escapeHtml(item.path)}" data-type="${escapeHtml(item.type)}">Uninstall</button>`
+    : `<button class="btn btn--primary store-btn-install" type="button" data-repo-url="${escapeHtml(item.repoUrl)}" data-item-path="${escapeHtml(item.path)}" data-type="${escapeHtml(item.type)}">Install</button>`;
   return `
-    <div class="store-card" data-repo-url="${escapeHtml(item.repoUrl)}" data-item-path="${escapeHtml(item.path)}" data-type="${escapeHtml(item.type)}">
+    <div class="store-card" data-repo-url="${escapeHtml(item.repoUrl)}" data-item-path="${escapeHtml(item.path)}" data-type="${escapeHtml(item.type)}" data-plugin-type="${escapeHtml(item.pluginType || "")}" data-engine-type="${escapeHtml(item.engineType || "")}">
       <div class="store-card-thumb-wrap${clickableClass}"${screenshotsData}${thumbA11y}>${thumb}</div>
       <div class="store-card-body">
         <div class="store-card-main">
@@ -141,6 +185,7 @@ const _renderItemCard = (
         </div>
         <div class="store-card-footer">
           <span class="store-type-badge store-type-${item.type}">${typeLabel}</span>
+          ${subLabel ? `<span class="store-subtype-badge">${escapeHtml(subLabel)}</span>` : ""}
           <div class="store-card-actions">${btn}</div>
         </div>
       </div>
@@ -150,22 +195,50 @@ const _renderItemCard = (
 const _filterItems = (
   items: StoreItem[],
   typeFilter: string,
+  subtypeFilter: string,
   searchQuery: string,
 ): StoreItem[] => {
   let out = items;
   if (typeFilter && typeFilter !== "all") {
     out = out.filter((i) => i.type === typeFilter);
   }
+  if (subtypeFilter && subtypeFilter !== "all") {
+    out = out.filter((i) => {
+      if (i.type === "plugin") return i.pluginType === subtypeFilter;
+      if (i.type === "engine") return i.engineType === subtypeFilter;
+      return true;
+    });
+  }
   if (searchQuery && searchQuery.trim()) {
     const q = searchQuery.trim().toLowerCase();
     out = out.filter(
       (i) =>
         (i.name && i.name.toLowerCase().includes(q)) ||
-        (i.description && i.description.toLowerCase().includes(q)),
+        (i.description && i.description.toLowerCase().includes(q)) ||
+        (i.repoName && i.repoName.toLowerCase().includes(q)) ||
+        (i.author?.name && i.author.name.toLowerCase().includes(q)),
     );
   }
   return out;
 };
+
+function collectSubtypes(items: StoreItem[], typeFilter: string): string[] {
+  if (typeFilter === "plugin") {
+    const set = new Set<string>();
+    items.forEach((i) => {
+      if (i.type === "plugin" && i.pluginType) set.add(i.pluginType);
+    });
+    return Array.from(set).sort();
+  }
+  if (typeFilter === "engine") {
+    const set = new Set<string>();
+    items.forEach((i) => {
+      if (i.type === "engine" && i.engineType) set.add(i.engineType);
+    });
+    return Array.from(set).sort();
+  }
+  return [];
+}
 
 export async function initStoreTab(
   container: HTMLElement,
@@ -177,6 +250,7 @@ export async function initStoreTab(
   let items: StoreItem[] = [];
   let repoStatusByUrl: Record<string, number> = {};
   let typeFilter = "all";
+  let subtypeFilter = "all";
   let searchQuery = "";
 
   async function loadRepos(): Promise<void> {
@@ -233,11 +307,95 @@ export async function initStoreTab(
     const catalogSection = container.querySelector<HTMLElement>(
       ".store-catalog-section",
     );
+    const typeTabs =
+      catalogSection?.querySelector<HTMLElement>(".store-type-tabs");
+    const subtypeWrap = catalogSection?.querySelector<HTMLElement>(
+      ".store-subtype-wrap",
+    );
+    const subtypeTabs = catalogSection?.querySelector<HTMLElement>(
+      ".store-subtype-tabs",
+    );
     const grid = catalogSection?.querySelector<HTMLElement>(
       ".store-catalog-grid",
     );
+
+    if (typeTabs) {
+      const typeCounts = {
+        all: items.length,
+        plugin: items.filter((i) => i.type === "plugin").length,
+        theme: items.filter((i) => i.type === "theme").length,
+        engine: items.filter((i) => i.type === "engine").length,
+      };
+      typeTabs.innerHTML = [
+        { id: "all", label: "All", count: typeCounts.all },
+        { id: "plugin", label: "Plugins", count: typeCounts.plugin },
+        { id: "theme", label: "Themes", count: typeCounts.theme },
+        { id: "engine", label: "Engines", count: typeCounts.engine },
+      ]
+        .map(
+          (t) =>
+            `<button class="btn store-type-tab ${typeFilter === t.id ? "active" : ""}" type="button" data-type="${escapeHtml(t.id)}">${escapeHtml(t.label)} <span class="store-tab-count">${t.count}</span></button>`,
+        )
+        .join("");
+      typeTabs
+        .querySelectorAll<HTMLButtonElement>(".store-type-tab")
+        .forEach((btn) => {
+          btn.addEventListener("click", () => {
+            typeFilter = btn.dataset.type || "all";
+            subtypeFilter = "all";
+            render();
+          });
+        });
+    }
+
+    const subtypes = collectSubtypes(items, typeFilter);
+    if (subtypeWrap) {
+      if (subtypes.length === 0) {
+        subtypeWrap.classList.add("store-subtype-wrap--hidden");
+        if (subtypeTabs) subtypeTabs.innerHTML = "";
+      } else {
+        subtypeWrap.classList.remove("store-subtype-wrap--hidden");
+        if (subtypeTabs) {
+          const filteredForType = items.filter((i) => i.type === typeFilter);
+          subtypeTabs.innerHTML = [
+            { id: "all", label: "All", count: filteredForType.length },
+            ...subtypes.map((id) => ({
+              id,
+              label:
+                typeFilter === "plugin"
+                  ? pluginTypeLabel(id)
+                  : engineTypeLabel(id),
+              count: filteredForType.filter(
+                (i) =>
+                  (typeFilter === "plugin" && i.pluginType === id) ||
+                  (typeFilter === "engine" && i.engineType === id),
+              ).length,
+            })),
+          ]
+            .map(
+              (t) =>
+                `<button class="btn store-subtype-tab ${subtypeFilter === t.id ? "active" : ""}" type="button" data-subtype="${escapeHtml(t.id)}">${escapeHtml(t.label)} <span class="store-tab-count">${t.count}</span></button>`,
+            )
+            .join("");
+          subtypeTabs
+            .querySelectorAll<HTMLButtonElement>(".store-subtype-tab")
+            .forEach((btn) => {
+              btn.addEventListener("click", () => {
+                subtypeFilter = btn.dataset.subtype || "all";
+                render();
+              });
+            });
+        }
+      }
+    }
+
     if (grid) {
-      const filtered = _filterItems(items, typeFilter, searchQuery);
+      const filtered = _filterItems(
+        items,
+        typeFilter,
+        subtypeFilter,
+        searchQuery,
+      );
       grid.innerHTML = filtered
         .map((item) => _renderItemCard(item, getToken))
         .join("");
@@ -367,29 +525,27 @@ export async function initStoreTab(
     <section class="store-repos-section settings-section">
       <div class="store-repos-header">
         <h2 class="settings-section-heading">Repositories</h2>
-        <button class="store-btn store-btn-add" type="button">Add</button>
+        <button class="btn btn--primary store-btn-add" type="button">Add repository</button>
       </div>
       <div class="store-add-repo-wrap" style="display:none">
         <input type="text" class="store-input-url" placeholder="https://github.com/user/repo.git">
-        <button class="store-btn store-btn-add-confirm" type="button">Add repository</button>
+        <button class="btn btn--primary store-btn-add-confirm" type="button">Add</button>
         <span class="store-inline-error"></span>
       </div>
-      <p class="settings-desc">Add a git repository URL to browse and install plugins, themes, and engines from it.</p>
+      <p class="settings-desc">Add a git repository URL to browse and install plugins, themes, and engines. Set <code>repo-image</code> in the repo’s package.json to show an image next to the URL.</p>
       <div class="store-repo-list-wrap"></div>
       <div class="store-repos-actions">
-        <button class="store-btn store-btn-refresh-all" type="button">Refresh All</button>
+        <button class="btn store-btn-refresh-all" type="button">Refresh all</button>
       </div>
     </section>
     <section class="store-catalog-section settings-section">
-      <h2 class="settings-section-heading">Store</h2>
-      <div class="store-catalog-filters">
-        <div class="store-filter-btns">
-          <button class="store-filter-btn active" data-filter="all" type="button">All</button>
-          <button class="store-filter-btn" data-filter="plugin" type="button">Plugins</button>
-          <button class="store-filter-btn" data-filter="theme" type="button">Themes</button>
-          <button class="store-filter-btn" data-filter="engine" type="button">Engines</button>
-        </div>
-        <input type="text" class="store-search-input" placeholder="Search…">
+      <h2 class="settings-section-heading">Catalog</h2>
+      <div class="store-catalog-search-wrap">
+        <input type="text" class="store-search-input" placeholder="Search name, description, repo, author…" id="store-search-input">
+      </div>
+      <div class="store-type-tabs" role="tablist"></div>
+      <div class="store-subtype-wrap store-subtype-wrap--hidden">
+        <div class="store-subtype-tabs" role="tablist"></div>
       </div>
       <div class="store-catalog-grid"></div>
     </section>
@@ -465,24 +621,11 @@ export async function initStoreTab(
     }
   });
 
-  container
-    .querySelectorAll<HTMLButtonElement>(".store-filter-btn")
-    .forEach((btn) => {
-      btn.addEventListener("click", () => {
-        container
-          .querySelectorAll<HTMLButtonElement>(".store-filter-btn")
-          .forEach((b) => b.classList.remove("active"));
-        btn.classList.add("active");
-        typeFilter = btn.dataset.filter || "all";
-        render();
-      });
-    });
-
   const searchInput = container.querySelector<HTMLInputElement>(
-    ".store-search-input",
+    "#store-search-input",
   );
   searchInput?.addEventListener("input", () => {
-    searchQuery = searchInput.value || "";
+    searchQuery = searchInput?.value || "";
     render();
   });
 

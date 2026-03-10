@@ -1,0 +1,54 @@
+<div class="command-result help-container">
+  <div class="help-search-wrap">
+    <input type="text" class="help-search" placeholder="Search commands..." id="help-search-input">
+  </div>
+  {{prefixHint}}
+  <div class="help-layout">
+    <div class="help-tabs">{{tabButtons}}</div>
+    <div class="help-panels">{{panels}}</div>
+  </div>
+  <script>
+    (function(){
+      var tabs=document.querySelectorAll('.help-tab');
+      var panels=document.querySelectorAll('.help-panel');
+      tabs.forEach(function(t){
+        t.addEventListener('click',function(){
+          tabs.forEach(function(x){x.classList.remove('active')});
+          panels.forEach(function(x){x.classList.remove('active')});
+          t.classList.add('active');
+          var p=document.querySelector('[data-help-panel="'+t.dataset.helpCat+'"]');
+          if(p)p.classList.add('active');
+        });
+      });
+      var input=document.getElementById('help-search-input');
+      if(input)input.addEventListener('input',function(){
+        var q=input.value.toLowerCase().trim();
+        var rows=document.querySelectorAll('.help-row');
+        var counts={};
+        rows.forEach(function(r){
+          var match=!q||r.dataset.helpSearch.toLowerCase().includes(q);
+          r.style.display=match?'':'none';
+          var panel=r.closest('.help-panel');
+          if(panel){
+            var cat=panel.dataset.helpPanel;
+            if(!counts[cat])counts[cat]=0;
+            if(match)counts[cat]++;
+          }
+        });
+        tabs.forEach(function(t){
+          var cat=t.dataset.helpCat;
+          var c=t.querySelector('.help-tab-count');
+          if(c&&counts[cat]!==undefined)c.textContent=counts[cat];
+        });
+        if(q){
+          tabs.forEach(function(x){x.classList.remove('active')});
+          panels.forEach(function(x){x.classList.add('active')});
+        }else{
+          panels.forEach(function(x){x.classList.remove('active')});
+          var first=tabs[0];
+          if(first){first.classList.add('active');var fp=document.querySelector('[data-help-panel="'+first.dataset.helpCat+'"]');if(fp)fp.classList.add('active');}
+        }
+      });
+    })();
+  </script>
+</div>
