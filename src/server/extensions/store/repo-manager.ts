@@ -92,9 +92,19 @@ async function ensureReposStructure(): Promise<void> {
 async function readReposData(): Promise<ReposData> {
   await ensureReposStructure();
   const raw = await readFile(getReposPath(), "utf-8");
-  const parsed = JSON.parse(raw) as ReposData;
-  if (!Array.isArray(parsed.repos)) parsed.repos = [];
-  if (!Array.isArray(parsed.installed)) parsed.installed = [];
+  let parsed: ReposData;
+  try {
+    const obj = JSON.parse(raw);
+    if (!obj || typeof obj !== "object" || Array.isArray(obj)) {
+      parsed = { repos: [], installed: [] };
+    } else {
+      parsed = obj as ReposData;
+      if (!Array.isArray(parsed.repos)) parsed.repos = [];
+      if (!Array.isArray(parsed.installed)) parsed.installed = [];
+    }
+  } catch {
+    parsed = { repos: [], installed: [] };
+  }
   return parsed;
 }
 

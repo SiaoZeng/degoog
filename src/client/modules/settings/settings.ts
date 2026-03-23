@@ -44,7 +44,7 @@ function _showAuthGate(): void {
   if (!page) return;
   page.innerHTML = `
     <header class="settings-page-header">
-      <a onclick="window.history.back()" class="settings-page-back">
+      <a href="/" onclick="event.preventDefault();document.referrer&&new URL(document.referrer).origin===location.origin?history.back():location.href='/'" class="settings-page-back">
         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <path d="M19 12H5M12 19l-7-7 7-7"/>
         </svg>
