@@ -79,6 +79,7 @@ export interface AppState {
   currentLanguage: string;
   mediaLoading: boolean;
   currentBangQuery: string;
+  openInNewTab: boolean;
 }
 
 export type SettingFieldType =
