@@ -43,11 +43,12 @@ router.get("/api/proxy/image", async (c) => {
     const stored = await getSettings(authId);
     const apiKey = asString(stored["apiKey"]);
     const serverUrl = asString(stored["url"]);
-    if (apiKey && serverUrl) {
+    const headerName = asString(stored["headerName"]);
+    if (apiKey && serverUrl && headerName && /^[A-Za-z0-9-]+$/.test(headerName)) {
       try {
         const serverHost = new URL(serverUrl).hostname;
         if (parsed.hostname === serverHost) {
-          headers["X-Emby-Token"] = apiKey;
+          headers[headerName] = apiKey;
         }
       } catch {}
     }
