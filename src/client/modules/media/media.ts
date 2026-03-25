@@ -121,6 +121,7 @@ export function openMediaPreview(
     };
   }
   if (info) {
+    const target = state.openInNewTab ? ' target="_blank" rel="noopener"' : "";
     const engines = item.sources?.length
       ? `<div class="media-preview-engines">${item.sources.map((s) => `<span class="result-engine-tag">${escapeHtml(s)}</span>`).join("")}</div>`
       : "";
@@ -135,10 +136,10 @@ export function openMediaPreview(
     })();
     info.innerHTML = `
       <h3 class="media-preview-title">${escapeHtml(item.title)}</h3>
-      <a class="media-preview-link" href="${escapeHtml(item.url)}" target="_blank">${escapeHtml(cleanHostname(item.url))}</a>
+      <a class="media-preview-link" href="${escapeHtml(item.url)}"${target}>${escapeHtml(cleanHostname(item.url))}</a>
       ${engines}
       <div class="media-preview-actions">
-        <a class="btn btn--primary media-preview-visit" href="${escapeHtml(item.url)}" target="_blank">Visit page</a>
+        <a class="btn btn--primary media-preview-visit" href="${escapeHtml(item.url)}"${target}>Visit page</a>
         ${downloadUrl ? `<a class="btn btn--secondary media-preview-download" href="${escapeHtml(downloadUrl)}" download="${escapeHtml(downloadFilename)}">Download</a>` : ""}
       </div>
     `;

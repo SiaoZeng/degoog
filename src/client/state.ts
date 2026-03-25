@@ -17,4 +17,5 @@ export const state: AppState = {
   currentLanguage: "",
   mediaLoading: false,
   currentBangQuery: "",
+  openInNewTab: false,
 };

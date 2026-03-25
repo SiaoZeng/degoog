@@ -1,24 +1,36 @@
 import { idbGet, idbSet } from "../utils/db";
-import { THEME_KEY } from "../constants";
+import { THEME_KEY, OPEN_IN_NEW_TAB_KEY } from "../constants";
 import { applyTheme } from "../utils/theme";
 import { requestInstallPrompt } from "../utils/install-prompt";
 import { authHeaders, jsonHeaders } from "../utils/request";
 
-export async function initThemeSelectOnly(): Promise<void> {
+export async function initAppearanceSettings(): Promise<void> {
   const themeSelect = document.getElementById(
     "theme-select",
   ) as HTMLSelectElement | null;
-  if (!themeSelect) return;
-  const saved = await idbGet<string>(THEME_KEY);
-  themeSelect.value = saved || "system";
-  themeSelect.addEventListener("change", async () => {
-    const value = themeSelect.value;
-    await idbSet(THEME_KEY, value);
-    try {
-      localStorage.setItem(THEME_KEY, value);
-    } catch {}
-    applyTheme(value);
-  });
+  if (themeSelect) {
+    const saved = await idbGet<string>(THEME_KEY);
+    themeSelect.value = saved || "system";
+    themeSelect.addEventListener("change", async () => {
+      const value = themeSelect.value;
+      await idbSet(THEME_KEY, value);
+      try {
+        localStorage.setItem(THEME_KEY, value);
+      } catch {}
+      applyTheme(value);
+    });
+  }
+
+  const openInNewTab = document.getElementById(
+    "settings-open-new-tab",
+  ) as HTMLInputElement | null;
+  if (openInNewTab) {
+    const saved = await idbGet<boolean>(OPEN_IN_NEW_TAB_KEY);
+    openInNewTab.checked = saved || false;
+    openInNewTab.addEventListener("change", async () => {
+      await idbSet(OPEN_IN_NEW_TAB_KEY, openInNewTab.checked);
+    });
+  }
 }
 
 export async function initGeneralTab(
@@ -30,6 +42,14 @@ export async function initGeneralTab(
   if (themeSelect) {
     const saved = await idbGet<string>(THEME_KEY);
     themeSelect.value = saved || "system";
+  }
+
+  const openInNewTab = document.getElementById(
+    "settings-open-new-tab",
+  ) as HTMLInputElement | null;
+  if (openInNewTab) {
+    const saved = await idbGet<boolean>(OPEN_IN_NEW_TAB_KEY);
+    openInNewTab.checked = saved || false;
   }
 
   const proxyEnabled = document.getElementById(
@@ -157,6 +177,9 @@ export async function initGeneralTab(
           localStorage.setItem(THEME_KEY, value);
         } catch {}
         applyTheme(value);
+      }
+      if (openInNewTab) {
+        await idbSet(OPEN_IN_NEW_TAB_KEY, openInNewTab.checked);
       }
       if (proxyEnabled && proxyUrls) {
         try {
