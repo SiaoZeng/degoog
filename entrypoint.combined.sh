@@ -27,14 +27,12 @@ if ! grep -q '^\s*- json' "$SETTINGS"; then
   sed -i '/- html/a\    - json' "$SETTINGS"
 fi
 
-# Enable additional engines (read from SEARXNG_ENABLE_ENGINES env or use defaults)
+# Enable additional engines
 ENGINES_TO_ENABLE="${SEARXNG_ENABLE_ENGINES:-huggingface,huggingface datasets,huggingface spaces,cachy os packages,hackernews,ollama,crates.io,npm,gitlab,nixos wiki,wolframalpha}"
 
-# For each engine, find its "disabled: true" line and change to "disabled: false"
 IFS=','
 for engine_name in $ENGINES_TO_ENABLE; do
   engine_name=$(echo "$engine_name" | sed 's/^ *//;s/ *$//')
-  # Find line number of "name: <engine_name>" then find next "disabled: true" within 6 lines
   line=$(grep -n "name: ${engine_name}$" "$SETTINGS" | head -1 | cut -d: -f1)
   if [ -n "$line" ]; then
     end=$((line + 6))
