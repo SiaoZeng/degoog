@@ -1,0 +1,64 @@
+# Combined degoog + SearXNG container
+# SearXNG runs headless on 127.0.0.1:8888 (internal)
+# degoog serves UI on port 8082 (exposed)
+
+# --- Stage 1: Build SearXNG ---
+FROM python:3.12-alpine AS searxng-build
+RUN apk add --no-cache git build-base libffi-dev libxml2-dev libxslt-dev
+WORKDIR /searxng
+
+# Clone SearXNG (pinned to latest stable)
+RUN git clone --depth 1 https://github.com/searxng/searxng.git . && \
+    pip install --no-cache-dir --prefix=/searxng-install -r requirements.txt && \
+    python -m compileall -q searx
+
+# --- Stage 2: Build degoog ---
+FROM oven/bun:1-alpine AS degoog-build
+WORKDIR /app
+COPY package.json bun.lock* ./
+RUN bun install --frozen-lockfile
+COPY . .
+RUN bun run build
+
+# --- Stage 3: Runtime ---
+FROM python:3.12-alpine AS runtime
+
+RUN apk add --no-cache \
+    git ca-certificates gosu curl \
+    libxml2 libxslt \
+    supervisor
+
+# Install Bun (Alpine needs unzip + bash for installer)
+RUN apk add --no-cache bash unzip && \
+    curl -fsSL https://bun.sh/install | BUN_INSTALL=/usr/local bash
+
+# SearXNG
+WORKDIR /searxng
+COPY --from=searxng-build /searxng/searx ./searx
+COPY --from=searxng-build /searxng-install /usr/local
+# Use SearXNG's own default settings.yml (includes all 242+ engine definitions)
+RUN mkdir -p /etc/searxng && cp ./searx/settings.yml /etc/searxng/settings.yml
+
+# degoog
+WORKDIR /app
+COPY --from=degoog-build /app/node_modules ./node_modules
+COPY --from=degoog-build /app/src ./src
+COPY --from=degoog-build /app/package.json ./package.json
+
+# Default SearXNG engine and manager plugin (copied to data/ on first run)
+COPY combined/engines/searxng/index.ts /app/data-default/engines/searxng/index.ts
+COPY combined/plugins/searxng-manager/index.ts /app/data-default/plugins/searxng-manager/index.ts
+COPY combined/plugins/searxng-manager/page.html /app/data-default/plugins/searxng-manager/page.html
+
+# supervisord config
+COPY supervisord.conf /etc/supervisord.conf
+
+# entrypoint
+COPY entrypoint.combined.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
+ENV DEGOOG_PORT=8082
+ENV SEARXNG_SETTINGS_PATH=/etc/searxng/settings.yml
+EXPOSE 8082
+
+ENTRYPOINT ["/entrypoint.sh"]

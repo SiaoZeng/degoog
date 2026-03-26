@@ -104,6 +104,99 @@ https://proxmox-scripts.com/posts/degoog
   </a>
 </p>
 
+## Combined Mode: degoog + SearXNG
+
+This fork adds a **combined deployment** that runs degoog and [SearXNG](https://github.com/searxng/searxng) in a single Docker container. SearXNG provides 242+ search engines as a headless API backend, while degoog serves as the frontend with its full plugin/theme/extension system.
+
+### Architecture
+
+```
+┌─────────────────────────────────────────┐
+│  Docker Container (Port 8082)           │
+│                                         │
+│  ┌──────────────┐  ┌─────────────────┐  │
+│  │ degoog (Bun) │──│ SearXNG Engine  │  │
+│  │ UI + Plugins │  │ (Custom Engine) │  │
+│  │ :8082        │  └────────┬────────┘  │
+│  └──────────────┘           │           │
+│                    JSON API │           │
+│  ┌──────────────────────────▼────────┐  │
+│  │ SearXNG (Python/Flask)            │  │
+│  │ :8888 (internal, 127.0.0.1)      │  │
+│  │ 242+ Engines                      │  │
+│  └───────────────────────────────────┘  │
+└─────────────────────────────────────────┘
+```
+
+### Quick Start
+
+```bash
+git clone https://github.com/SiaoZeng/degoog.git
+cd degoog
+docker compose -f docker-compose.combined.yml up -d --build
+# Open http://localhost:8082
+```
+
+### What's Included
+
+| Component | Description |
+|---|---|
+| `data/engines/searxng/` | Custom SearXNG engine — connects degoog to SearXNG's JSON API |
+| `data/plugins/searxng-manager/` | Engine Manager Plugin — toggle 242+ SearXNG engines from a web UI |
+| `Dockerfile.combined` | Multi-stage build: Python (SearXNG) + Bun (degoog) in one container |
+| `supervisord.conf` | Process manager for both services |
+| `tools/dg` | CLI search tool (fish shell) for terminal-based queries |
+
+### SearXNG Engine Manager
+
+Access at `http://localhost:8082/api/plugin/searxng-manager/` — filter by category, search by name, toggle engines on/off with batch save and automatic SearXNG restart.
+
+### CLI: `dg`
+
+A terminal search tool that queries the degoog API. Install to your PATH:
+
+```bash
+cp tools/dg ~/.local/bin/dg
+chmod +x ~/.local/bin/dg
+```
+
+Usage:
+
+```bash
+dg "search query"                # Web search (10 results)
+dg -n 20 "deep topic"           # More results
+dg -t news "linux kernel"       # News search
+dg -s "privacy tools"           # SearXNG engines only
+dg -j "query" | jq '.results'   # JSON output for scripting
+dg -e "query"                   # Show engine timings
+dg -l de "Datenschutz"          # German results
+```
+
+### Environment Variables
+
+| Variable | Default | Description |
+|---|---|---|
+| `DEGOOG_PORT` | 8082 | degoog frontend port |
+| `SEARXNG_PORT` | 8888 | SearXNG internal port |
+| `SEARXNG_BIND_ADDRESS` | 127.0.0.1 | SearXNG bind (internal only) |
+| `SEARXNG_SECRET` | random | SearXNG secret key |
+| `SEARXNG_IMAGE_PROXY` | true | Proxy images through SearXNG |
+| `SEARXNG_ENABLE_ENGINES` | *(see entrypoint)* | Comma-separated engines to activate on startup |
+| `PUID` / `PGID` | 1000 | Container user/group ID |
+
+### Activate Additional Engines
+
+Set `SEARXNG_ENABLE_ENGINES` in `docker-compose.combined.yml`:
+
+```yaml
+environment:
+  - SEARXNG_ENABLE_ENGINES=huggingface,hackernews,crates.io,npm,gitlab,wolframalpha
+```
+
+Or use the Engine Manager UI at runtime.
+
+---
+
 ## Public instances
 
 Some amazing people around the web decided to make their degoog instances available for everyone to use, and they 100% deserve a shout-out! Check out the full list [here](docs/repo/PUBLIC_INSTANCES.md)

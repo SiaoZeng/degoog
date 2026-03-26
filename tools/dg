@@ -1,0 +1,160 @@
+#!/usr/bin/env fish
+# dg — degoog/SearXNG CLI search
+# Usage: dg [options] <query>
+#   -t, --type     Search type: all|images|videos|news (default: all)
+#   -n, --count    Max results to show (default: 10)
+#   -j, --json     Raw JSON output
+#   -s, --sx-only  SearXNG results only (filter by source)
+#   -e, --engines  Show engine timings
+#   -l, --lang     Search language (e.g. de, en)
+#   -p, --page     Page number (default: 1)
+#   --url          degoog base URL (default: http://127.0.0.1:8082)
+
+set -l base_url "http://127.0.0.1:8082"
+set -l search_type "all"
+set -l max_results 10
+set -l json_mode false
+set -l sx_only false
+set -l show_engines false
+set -l lang ""
+set -l page 1
+set -l query_parts
+
+# Parse arguments
+set -l i 1
+while test $i -le (count $argv)
+    switch $argv[$i]
+        case -t --type
+            set i (math $i + 1)
+            set search_type $argv[$i]
+        case -n --count
+            set i (math $i + 1)
+            set max_results $argv[$i]
+        case -j --json
+            set json_mode true
+        case -s --sx-only
+            set sx_only true
+        case -e --engines
+            set show_engines true
+        case -l --lang
+            set i (math $i + 1)
+            set lang $argv[$i]
+        case -p --page
+            set i (math $i + 1)
+            set page $argv[$i]
+        case --url
+            set i (math $i + 1)
+            set base_url $argv[$i]
+        case -h --help
+            echo "dg — degoog/SearXNG CLI search"
+            echo ""
+            echo "Usage: dg [options] <query>"
+            echo ""
+            echo "Options:"
+            echo "  -t, --type TYPE    all|images|videos|news (default: all)"
+            echo "  -n, --count N      Max results (default: 10)"
+            echo "  -j, --json         Raw JSON output"
+            echo "  -s, --sx-only      SearXNG results only"
+            echo "  -e, --engines      Show engine timings"
+            echo "  -l, --lang LANG    Language code (e.g. de, en)"
+            echo "  -p, --page N       Page number (default: 1)"
+            echo "  --url URL          degoog URL (default: http://127.0.0.1:8082)"
+            echo "  -h, --help         Show this help"
+            echo ""
+            echo "Examples:"
+            echo "  dg 'rust async patterns'"
+            echo "  dg -t news -n 5 'linux kernel'"
+            echo "  dg -s 'CachyOS zen5'          # SearXNG engines only"
+            echo "  dg -j 'query' | jq '.results'"
+            return 0
+        case '*'
+            set -a query_parts $argv[$i]
+    end
+    set i (math $i + 1)
+end
+
+set -l query (string join " " $query_parts)
+
+if test -z "$query"
+    echo "Usage: dg [options] <query>" >&2
+    echo "Try: dg --help" >&2
+    return 1
+end
+
+# Check if degoog is running
+if not curl -sf -o /dev/null --connect-timeout 2 "$base_url/" 2>/dev/null
+    echo "Error: degoog not reachable at $base_url" >&2
+    echo "Start with: cd ~/gh/degoog && docker compose -f docker-compose.combined.yml up -d" >&2
+    return 1
+end
+
+# Build API URL
+set -l encoded_query (python3 -c "import urllib.parse; print(urllib.parse.quote('$query'))")
+set -l api_url "$base_url/api/search?q=$encoded_query&type=$search_type&page=$page"
+
+if test -n "$lang"
+    set api_url "$api_url&lang=$lang"
+end
+
+# Execute search
+set -l response (curl -sf "$api_url" 2>/dev/null)
+
+if test $status -ne 0
+    echo "Error: Search request failed" >&2
+    return 1
+end
+
+# JSON mode — raw output
+if test "$json_mode" = true
+    echo $response | python3 -m json.tool
+    return 0
+end
+
+# Formatted output
+echo $response | python3 -c "
+import sys, json
+
+data = json.load(sys.stdin)
+results = data.get('results', [])
+timings = data.get('engineTimings', [])
+total_time = data.get('totalTime', 0)
+query = data.get('query', '')
+sx_only = '$sx_only' == 'true'
+max_n = $max_results
+show_engines = '$show_engines' == 'true'
+
+if sx_only:
+    results = [r for r in results if 'SearXNG' in r.get('source', '')]
+
+results = results[:max_n]
+
+print(f'\033[1;36m  dg\033[0m \033[1m{query}\033[0m  ({len(results)} results, {total_time}ms)')
+print()
+
+for i, r in enumerate(results, 1):
+    title = r.get('title', 'No title')
+    url = r.get('url', '')
+    snippet = r.get('snippet', '')
+    sources = ', '.join(r.get('sources', [r.get('source', '?')]))
+
+    print(f'  \033[1;33m{i:2d}.\033[0m \033[1m{title}\033[0m')
+    print(f'      \033[4;34m{url}\033[0m')
+    if snippet:
+        # Truncate snippet to ~120 chars
+        s = snippet[:160].replace('\n', ' ').strip()
+        if len(snippet) > 160:
+            s += '...'
+        print(f'      \033[2m{s}\033[0m')
+    print(f'      \033[36m[{sources}]\033[0m')
+    print()
+
+if show_engines and timings:
+    print(f'  \033[1;35mEngine Timings:\033[0m')
+    for t in sorted(timings, key=lambda x: x.get('time', 0), reverse=True):
+        name = t.get('name', '?')
+        ms = t.get('time', 0)
+        count = t.get('resultCount', 0)
+        bar = '█' * min(int(ms / 100), 30)
+        print(f'    {name:25s} {ms:5d}ms  {count:3d} results  {bar}')
+    print()
+"
