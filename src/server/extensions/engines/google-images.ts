@@ -3,6 +3,7 @@ import type {
   SearchResult,
   TimeFilter,
   EngineContext,
+  SettingField,
 } from "../../types";
 import { getRandomGsaAgent } from "../../utils/user-agents";
 import {
@@ -28,6 +29,22 @@ interface GoogleImageResult {
 
 export class GoogleImagesEngine implements SearchEngine {
   name = "Google Images";
+  safeSearch: string = "off";
+  settingsSchema: SettingField[] = [
+    {
+      key: "safeSearch",
+      label: "Safe Search",
+      type: "select",
+      options: ["off", "on"],
+      description: "Filter explicit content from image results.",
+    },
+  ];
+
+  configure(settings: Record<string, string | string[]>): void {
+    if (typeof settings.safeSearch === "string") {
+      this.safeSearch = settings.safeSearch;
+    }
+  }
 
   async executeSearch(
     query: string,
@@ -49,6 +66,7 @@ export class GoogleImagesEngine implements SearchEngine {
         : resolveGoogleTbs(timeFilter);
     if (tbs) params.set("tbs", tbs);
     if (context?.lang) params.set("hl", context.lang);
+    if (this.safeSearch === "on") params.set("safe", "active");
 
     const ua = getRandomGsaAgent();
     const doFetch = context?.fetch ?? fetch;
