@@ -148,6 +148,36 @@ dg -l zh-TW "台灣半導體"            # Taiwanesisch
 
 Workflow: `dg` → URLs finden → Chrome DevTools MCP → gezielt Content extrahieren (spart Tokens vs. WebFetch).
 
+## Upstream-Sync
+
+Dieser Fork ist ein **Overlay** auf degoog — alle Änderungen liegen in separaten Dateien. Upstream-Updates können konfliktfrei gemergt werden.
+
+### Sync durchführen
+
+```fish
+cd ~/gh/degoog
+git fetch upstream
+git merge upstream/main
+docker compose -f docker-compose.combined.yml up -d --build
+```
+
+### Konflikt-Risiko
+
+| Datei | Typ | Konflikt bei Upstream-Update? |
+|---|---|---|
+| `COMBINED.md` | Neu | Nein — existiert upstream nicht |
+| `Dockerfile.combined` | Neu | Nein |
+| `docker-compose.combined.yml` | Neu | Nein |
+| `supervisord.conf` | Neu | Nein |
+| `entrypoint.combined.sh` | Neu | Nein |
+| `combined/` | Neu | Nein |
+| `tools/dg` | Neu | Nein |
+| **`src/client/settings/engines-tab.ts`** | **Gepatcht** | **Möglich** — einziger Patch an upstream-Code |
+
+Der einzige potenzielle Merge-Konflikt ist `engines-tab.ts` (SearXNG Manager Link am Ende der Funktion `initEnginesTab`). Falls upstream diese Datei ändert, muss der Link-Block manuell re-applied werden — ist ein 15-Zeilen Append, trivial zu lösen.
+
+**Regel:** Eigene Änderungen immer in separaten Dateien halten. Patches an upstream-Code minimieren.
+
 ## SearXNG Engine Manager (nur im Fork)
 
 URL: `http://127.0.0.1:8082/api/plugin/searxng-manager/`
