@@ -137,6 +137,7 @@
   let currentSearch = "";
   let showFilter = "all";
 
+  const TOKEN_KEY = "degoog-settings-token";
   const contentEl = document.getElementById("content");
   const actionsEl = document.getElementById("actions");
   const changeCountEl = document.getElementById("changeCount");
@@ -146,6 +147,35 @@
   cancelBtn.addEventListener("click", resetChanges);
   saveBtn.addEventListener("click", saveChanges);
 
+  function getStoredToken() {
+    var tokenFromUrl = new URLSearchParams(window.location.search).get("token");
+    if (tokenFromUrl) {
+      try {
+        sessionStorage.setItem(TOKEN_KEY, tokenFromUrl);
+      } catch (_err) {}
+      if (window.location.search.indexOf("token=") !== -1) {
+        window.history.replaceState({}, "", window.location.pathname);
+      }
+      return tokenFromUrl;
+    }
+    try {
+      return sessionStorage.getItem("degoog-settings-token");
+    } catch (_err) {
+      return null;
+    }
+  }
+
+  function authFetch(url, options) {
+    var token = getStoredToken();
+    var headers = Object.assign({}, options && options.headers ? options.headers : {});
+    if (token) headers["x-settings-token"] = token;
+    return fetch(url, Object.assign({}, options || {}, { headers: headers }));
+  }
+
+  function unauthorizedError() {
+    return new Error("Unauthorized: open Settings and unlock access first.");
+  }
+
   function escapeText(str) {
     const el = document.createElement("span");
     el.textContent = str;
@@ -154,7 +184,8 @@
 
   async function init() {
     try {
-      const res = await fetch("/api/plugin/searxng-manager/engines");
+      const res = await authFetch("/api/plugin/searxng-manager/engines");
+      if (res.status === 401) throw unauthorizedError();
       const data = await res.json();
       if (data.error) throw new Error(data.error);
       engines = data.engines.sort(function(a, b) { return a.name.localeCompare(b.name); });
@@ -315,11 +346,12 @@
     });
 
     try {
-      var res = await fetch("/api/plugin/searxng-manager/toggle", {
+      var res = await authFetch("/api/plugin/searxng-manager/toggle", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ engines: payload }),
       });
+      if (res.status === 401) throw unauthorizedError();
       var data = await res.json();
       if (data.ok) {
         Object.entries(changes).forEach(function(entry) {

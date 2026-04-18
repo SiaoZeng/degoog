@@ -1,14 +1,37 @@
 // SearXNG Engine Manager Plugin for degoog
 // Provides a settings page to enable/disable SearXNG engines
 
+import {
+  getSettingsTokenFromRequest,
+  validateSettingsToken,
+} from "../../../src/server/routes/settings-auth";
+
 const SEARXNG_BASE = process.env.SEARXNG_BASE_URL || "http://127.0.0.1:8888";
 const SETTINGS_PATH = process.env.SEARXNG_SETTINGS_PATH || "/etc/searxng/settings.yml";
+
+function getTokenFromRequest(req: Request): string | undefined {
+  return getSettingsTokenFromRequest({
+    req: Object.assign(req, {
+      header: (name: string) => req.headers.get(name) ?? undefined,
+      query: (name: string) =>
+        new URL(req.url).searchParams.get(name) ?? undefined,
+    }),
+  } as unknown as Parameters<typeof getSettingsTokenFromRequest>[0]);
+}
+
+async function requireSettingsAuth(req: Request): Promise<Response | null> {
+  const token = getTokenFromRequest(req);
+  if (await validateSettingsToken(token)) return null;
+  return Response.json({ error: "Unauthorized" }, { status: 401 });
+}
 
 export const routes = [
   {
     method: "get" as const,
     path: "/",
-    handler: async (_req: Request): Promise<Response> => {
+    handler: async (req: Request): Promise<Response> => {
+      const unauthorized = await requireSettingsAuth(req);
+      if (unauthorized) return unauthorized;
       const html = await Bun.file(
         new URL("page.html", import.meta.url).pathname,
       ).text();
@@ -20,7 +43,9 @@ export const routes = [
   {
     method: "get" as const,
     path: "/engines",
-    handler: async (_req: Request): Promise<Response> => {
+    handler: async (req: Request): Promise<Response> => {
+      const unauthorized = await requireSettingsAuth(req);
+      if (unauthorized) return unauthorized;
       try {
         const configRes = await fetch(`${SEARXNG_BASE}/config`);
         const config = (await configRes.json()) as {
@@ -52,6 +77,8 @@ export const routes = [
     method: "post" as const,
     path: "/toggle",
     handler: async (req: Request): Promise<Response> => {
+      const unauthorized = await requireSettingsAuth(req);
+      if (unauthorized) return unauthorized;
       try {
         const body = (await req.json()) as {
           engines: Array<{ name: string; enabled: boolean }>;

@@ -91,24 +91,26 @@ export async function initEnginesTab(
     html += `</div></div>`;
   }
 
-  // Note: all values below are static strings, no user input is interpolated.
-  // The existing container.innerHTML pattern is used throughout this file (line 93 in original).
-  html += `<div class="ext-group">
-    <h3 class="ext-group-label">SearXNG Backend</h3>
-    <div class="ext-cards">
-      <a href="/api/plugin/searxng-manager/" class="ext-card" style="text-decoration:none;color:inherit;cursor:pointer;">
-        <div class="ext-card-main">
-          <div class="ext-card-info">
-            <span class="ext-card-name">Manage SearXNG Engines</span>
-            <span style="font-size:0.8em;opacity:0.6;">Toggle 242+ search engines from the SearXNG backend</span>
+  if (allowConfigure) {
+    // Note: all values below are static strings, no user input is interpolated.
+    // The existing container.innerHTML pattern is used throughout this file (line 93 in original).
+    html += `<div class="ext-group">
+      <h3 class="ext-group-label">SearXNG Backend</h3>
+      <div class="ext-cards">
+        <a href="/api/plugin/searxng-manager/" class="ext-card searxng-manager-link" style="text-decoration:none;color:inherit;cursor:pointer;">
+          <div class="ext-card-main">
+            <div class="ext-card-info">
+              <span class="ext-card-name">Manage SearXNG Engines</span>
+              <span style="font-size:0.8em;opacity:0.6;">Toggle 242+ search engines from the SearXNG backend</span>
+            </div>
+            <div class="ext-card-actions">
+              <span style="font-size:0.85em;opacity:0.7;">Open &rarr;</span>
+            </div>
           </div>
-          <div class="ext-card-actions">
-            <span style="font-size:0.85em;opacity:0.7;">Open &rarr;</span>
-          </div>
-        </div>
-      </a>
-    </div>
-  </div>`;
+        </a>
+      </div>
+    </div>`;
+  }
 
   container.innerHTML = html;
 
@@ -123,6 +125,16 @@ export async function initEnginesTab(
     });
 
   if (allowConfigure) {
+    const managerLink = container.querySelector<HTMLAnchorElement>(
+      ".searxng-manager-link",
+    );
+    if (managerLink) {
+      const token = sessionStorage.getItem("degoog-settings-token");
+      managerLink.href = token
+        ? `/api/plugin/searxng-manager/?token=${encodeURIComponent(token)}`
+        : "/api/plugin/searxng-manager/";
+    }
+
     container
       .querySelectorAll<HTMLElement>(".ext-card-configure")
       .forEach((btn) => {

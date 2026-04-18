@@ -3,17 +3,22 @@
 # degoog serves UI on port 8082 (exposed)
 
 # --- Stage 1: Build SearXNG ---
-FROM python:3.12-alpine AS searxng-build
+FROM python:3.12-alpine@sha256:236173eb74001afe2f60862de935b74fcbd00adfca247b2c27051a70a6a39a2d AS searxng-build
+ARG SEARXNG_REPO=https://github.com/searxng/searxng.git
+ARG SEARXNG_REF=e8299a4c37627c6271ed83227c27cf98021c03f6
 RUN apk add --no-cache git build-base libffi-dev libxml2-dev libxslt-dev
 WORKDIR /searxng
 
-# Clone SearXNG (pinned to latest stable)
-RUN git clone --depth 1 https://github.com/searxng/searxng.git . && \
+# Fetch a pinned SearXNG revision for reproducible rebuilds
+RUN git init . && \
+    git remote add origin "$SEARXNG_REPO" && \
+    git fetch --depth 1 origin "$SEARXNG_REF" && \
+    git checkout --detach FETCH_HEAD && \
     pip install --no-cache-dir --prefix=/searxng-install -r requirements.txt && \
     python -m compileall -q searx
 
 # --- Stage 2: Build degoog ---
-FROM oven/bun:1-alpine AS degoog-build
+FROM oven/bun:1-alpine@sha256:26d8996560ca94eab9ce48afc0c7443825553c9a851f40ae574d47d20906826d AS degoog-build
 WORKDIR /app
 COPY package.json bun.lock* ./
 RUN bun install --frozen-lockfile
@@ -21,16 +26,12 @@ COPY . .
 RUN bun run build
 
 # --- Stage 3: Runtime ---
-FROM python:3.12-alpine AS runtime
+FROM python:3.12-alpine@sha256:236173eb74001afe2f60862de935b74fcbd00adfca247b2c27051a70a6a39a2d AS runtime
 
 RUN apk add --no-cache \
     git ca-certificates gosu curl \
     libxml2 libxslt \
     supervisor
-
-# Install Bun (Alpine needs unzip + bash for installer)
-RUN apk add --no-cache bash unzip && \
-    curl -fsSL https://bun.sh/install | BUN_INSTALL=/usr/local bash
 
 # SearXNG
 WORKDIR /searxng
@@ -41,12 +42,13 @@ RUN mkdir -p /etc/searxng && cp ./searx/settings.yml /etc/searxng/settings.yml
 
 # degoog
 WORKDIR /app
+COPY --from=degoog-build /usr/local/bin/bun /usr/local/bin/bun
 COPY --from=degoog-build /app/node_modules ./node_modules
 COPY --from=degoog-build /app/src ./src
 COPY --from=degoog-build /app/package.json ./package.json
 
-# Default SearXNG engine and manager plugin (copied to data/ on first run)
-COPY combined/engines/searxng/index.ts /app/data-default/engines/searxng/index.ts
+# Default SearXNG engines and manager plugin (synced into data/ on container start)
+COPY combined/engines/ /app/data-default/engines/
 COPY combined/plugins/searxng-manager/index.ts /app/data-default/plugins/searxng-manager/index.ts
 COPY combined/plugins/searxng-manager/page.html /app/data-default/plugins/searxng-manager/page.html
 

@@ -45,8 +45,8 @@ Process Management: **supervisord** startet beide Services.
 | `Dockerfile.combined` | Multi-Stage Build: Python 3.12 (SearXNG) + Bun (degoog) |
 | `docker-compose.combined.yml` | One-Command Deploy, Port 8082 |
 | `supervisord.conf` | Process Manager für degoog + SearXNG |
-| `entrypoint.combined.sh` | Init: Plugin-Copy, JSON-Format aktivieren, Engine-Aktivierung via Env |
-| `combined/engines/searxng/index.ts` | SearXNG Custom Engine (TypeScript, ~140 LoC) |
+| `entrypoint.combined.sh` | Init: Managed-Asset-Sync, JSON-Format aktivieren, Engine-Aktivierung via Env |
+| `combined/engines/` | SearXNG Engine-Familie für Web, Images, Videos und News |
 | `combined/plugins/searxng-manager/` | Engine Manager Plugin (Web-UI, nur im Fork) |
 | `combined/generate-engines.py` | Engine-Generator (nicht im Einsatz, Archiv) |
 | `tools/dg` | CLI Search Tool (fish shell) |
@@ -81,6 +81,8 @@ Discussion: https://github.com/fccview/degoog/discussions/48
 2. Manager Plugin entfernt — redundant (Engine hat comma-separated Settings) + Sicherheitslücke (unauthenticated auf public instances)
 3. `process.env` entfernt — Plugins können keine Env-Vars lesen
 
+**Wichtige Trennung:** Diese Punkte gelten für die **Store-Extension**. Der **Combined-Fork** ist bewusst lokal-first und nutzt die interne SearXNG-Instanz im selben Container statt einer frei konfigurierbaren Remote-URL.
+
 **Ergebnis:** Store-Repo wird in degoog's README aufgenommen.
 
 ## Ports
@@ -107,6 +109,10 @@ docker compose -f docker-compose.combined.yml down
 ```
 
 Restart Policy: `unless-stopped` — startet automatisch nach Reboot.
+
+## Build-Reproduzierbarkeit
+
+`Dockerfile.combined` pinnt SearXNG auf Commit `e8299a4c37627c6271ed83227c27cf98021c03f6`, pinnt die Basis-Images per Digest und nutzt im Runtime-Image denselben Bun-Binary-Pfad wie der Build-Stage statt eines separaten Installer-Downloads.
 
 ## Env-Variablen
 
@@ -147,6 +153,20 @@ dg -l zh-TW "台灣半導體"            # Taiwanesisch
 `~/.claude/skills/web-search-dgstyle/SKILL.md`
 
 Workflow: `dg` → URLs finden → Chrome DevTools MCP → gezielt Content extrahieren (spart Tokens vs. WebFetch).
+
+## Engine-Verhalten
+
+Der Combined-Fork registriert SearXNG als lokale Engine-Familie:
+- `SearXNG` für Web/General
+- `SearXNG Images`
+- `SearXNG Videos`
+- `SearXNG News`
+
+Die Engine-Module sind **lokal-only** und lesen ihre Backend-URL nur aus loopback-basierten Combined-Deployment-Werten statt aus user-editierbaren Engine-Settings. Remote-SearXNG-URLs gehören in das separate Store-Extension-Repo, nicht in diesen Fork.
+
+## Managed Asset Sync
+
+`entrypoint.combined.sh` synchronisiert die fork-eigenen Engines und das `searxng-manager`-Plugin bei jedem Containerstart aus `/app/data-default/` nach `/app/data/`. Dadurch landen Fixes und neue Engine-Varianten auch in bestehenden Volumes, ohne dass ein einmaliger First-Run-Copy alte Assets festschreibt.
 
 ## Upstream-Sync
 
