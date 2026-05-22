@@ -444,9 +444,7 @@ router.get("/settings/:tab", async (c) => {
   return c.html(await buildPage("settings.html", locale));
 });
 
-const _adminPaths = Array.from(
-  new Set(["admin", ADMIN_PATH].filter((p) => p !== "settings")),
-);
+const _adminPaths = [ADMIN_PATH].filter((p) => p !== "settings");
 
 for (const ap of _adminPaths) {
   router.get(`/${ap}/`, (c) =>
@@ -511,8 +509,17 @@ router.post("/api/cache/clear", async (c) => {
   const token = canBalrogPass(c);
   if (!(await gandalf(token)))
     return c.json({ error: "You shall not pass!" }, 401);
-  cache.clear();
-  return c.json({ ok: true });
+  const requested = c.req.query("scope") ?? cache.CACHE_SCOPE.ALL;
+  if (!cache.isCacheScope(requested)) {
+    return c.json(
+      {
+        error: `Invalid scope. Expected one of: ${Object.values(cache.CACHE_SCOPE).join(", ")}`,
+      },
+      400,
+    );
+  }
+  const cleared = await cache.clearByScope(requested);
+  return c.json({ ok: true, scope: requested, cleared });
 });
 
 const renderTakeoverResults = (): string =>

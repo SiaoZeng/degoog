@@ -21,9 +21,9 @@ import type {
 } from "../types";
 import { fetchViaHttpProxy } from "./http-proxy-fetch";
 import { logger } from "./logger";
-import { asBoolean, getSettings } from "./plugin-settings";
+import { asBoolean } from "./plugin-settings";
 import { fetchViaSocks, isSocksProxy } from "./socks-fetch";
-import { getInstanceSettings, setInstanceSettings } from "./server-settings";
+import { getInstanceSettings } from "./server-settings";
 
 export type { TransportFetchOptions as OutgoingFetchOptions };
 

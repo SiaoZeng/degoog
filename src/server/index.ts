@@ -18,6 +18,8 @@ import { initInterceptors } from "./extensions/interceptors/registry";
 import globalRouter from "./routes";
 import { build404 } from "./routes/pages";
 import { initServerKey } from "./utils/server-key";
+import { initValkey } from "./utils/cache-valkey";
+import { getInstanceId } from "./utils/server-settings";
 import { runMigrations } from "./migrations";
 
 const BASE_PATH = getBasePath();
@@ -83,6 +85,7 @@ ${ANSI_GRAY}██████████████████████�
 );
 
 await runMigrations();
+await initValkey(await getInstanceId());
 
 Promise.all([
   initServerKey(),

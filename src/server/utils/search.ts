@@ -12,7 +12,7 @@ import {
   SlotPluginContext,
   TimeFilter,
 } from "../types";
-import { createCache } from "./cache";
+import { createCache, useCache } from "./cache";
 import { logger } from "./logger";
 import { outgoingFetch } from "./outgoing";
 import { asString, getSettings, isDisabled } from "./plugin-settings";
@@ -20,7 +20,7 @@ import { checkRateLimit } from "./rate-limit";
 import { buildSignedProxyUrl } from "./proxy-sign";
 import { getClientIp } from "./request";
 import { applyFilter, syncVortexSignal } from "./translation-circuit";
-import { getInstanceSettings, setInstanceSettings } from "./server-settings";
+import { getInstanceSettings } from "./server-settings";
 
 export const DEFAULT_LANGUAGES = [
   "af",
@@ -197,6 +197,7 @@ export async function runSlotPlugins(
         fetch: outgoingFetch as SlotPluginContext["fetch"],
         signProxyUrl: buildSignedProxyUrl,
         createCache,
+        useCache,
       };
       const t0 = performance.now();
       const out = await plugin.execute(query, context);

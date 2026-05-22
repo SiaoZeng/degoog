@@ -11,6 +11,9 @@ import {
 export const MIGRATION_VERSION = 52026 as const;
 const SCHEMA_KEY = "__serverSettingsExtractedAt";
 const DEGOOG_INSTANCE_SETTINGS_ID = "degoog-settings";
+const DEGOOG_API_SECRET_ID = "degoog-api-secret";
+const API_SECRET_LEGACY_FIELD = "key";
+const API_SECRET_TARGET_FIELD = "apiSecretKey";
 
 type PluginStore = Record<string, unknown>;
 
@@ -57,8 +60,18 @@ export const runServerSettingsExtract052026 = async (): Promise<void> => {
   const existingStamp = typeof store[SCHEMA_KEY] === "number" ? (store[SCHEMA_KEY] as number) : 0;
   if (existingStamp >= MIGRATION_VERSION) return;
 
-  const blob = store[DEGOOG_INSTANCE_SETTINGS_ID];
-  if (!blob || typeof blob !== "object" || Array.isArray(blob)) {
+  const instanceBlob = store[DEGOOG_INSTANCE_SETTINGS_ID];
+  const apiSecretBlob = store[DEGOOG_API_SECRET_ID];
+  const apiSecretKey =
+    apiSecretBlob && typeof apiSecretBlob === "object" && !Array.isArray(apiSecretBlob)
+      ? (apiSecretBlob as Record<string, unknown>)[API_SECRET_LEGACY_FIELD]
+      : undefined;
+
+  const hasInstanceBlob =
+    instanceBlob && typeof instanceBlob === "object" && !Array.isArray(instanceBlob);
+  const hasApiSecret = typeof apiSecretKey === "string" && apiSecretKey.length > 0;
+
+  if (!hasInstanceBlob && !hasApiSecret) {
     store[SCHEMA_KEY] = MIGRATION_VERSION;
     await _writeAtomic(settingsPath, JSON.stringify(store, null, 2));
     return;
@@ -74,16 +87,23 @@ export const runServerSettingsExtract052026 = async (): Promise<void> => {
   }
 
   const existing = await readServerSettings();
-  const incoming = blob as Record<string, ServerSettingValue>;
+  const incoming: Record<string, ServerSettingValue> = hasInstanceBlob
+    ? { ...(instanceBlob as Record<string, ServerSettingValue>) }
+    : {};
+  if (hasApiSecret) incoming[API_SECRET_TARGET_FIELD] = apiSecretKey as string;
+
   await writeServerSettings({
     settings: { ...incoming, ...existing.settings },
   });
   logger.info(
     "migration:server-settings",
-    `moved degoog-settings (${Object.keys(incoming).length} keys) to server-settings.json`,
+    `moved ${Object.keys(incoming).length} key(s) to server-settings.json` +
+      `${hasInstanceBlob ? ` (incl. ${DEGOOG_INSTANCE_SETTINGS_ID})` : ""}` +
+      `${hasApiSecret ? ` (incl. ${DEGOOG_API_SECRET_ID})` : ""}`,
   );
 
-  delete store[DEGOOG_INSTANCE_SETTINGS_ID];
+  if (hasInstanceBlob) delete store[DEGOOG_INSTANCE_SETTINGS_ID];
+  if (hasApiSecret) delete store[DEGOOG_API_SECRET_ID];
   store[SCHEMA_KEY] = MIGRATION_VERSION;
   await _writeAtomic(settingsPath, JSON.stringify(store, null, 2));
 };

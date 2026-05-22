@@ -215,28 +215,38 @@
   // ctx.readFile is an async function to read any file from your plugin folder
   // ctx.signProxyUrl(url) returns a signed /api/proxy/image URL for any external image
   // ctx.fetch(url, init?) is a proxy-aware fetch, respects your outgoing proxy settings
-  // ctx.createCache(defaultTtlMs) returns an in-memory TTL cache { get, set, clear }
+  // ctx.useCache(namespace, defaultTtlMs) returns an async TTL cache { get, set, delete, clear }
 }</code></pre>
-          <h3>TTL cache (<code>createCache</code>)</h3>
+          <h3>TTL cache (<code>useCache</code>)</h3>
           <p>
             Both <code>init(ctx)</code> and slot <code>execute(query, context)</code>
-            receive <strong><code>createCache</code></strong>: a factory compatible with
-            the built-in server helper. Call
-            <code>ctx.createCache&lt;T&gt;(defaultTtlMs)</code> (or
-            <code>context.createCache&lt;T&gt;(defaultTtlMs)</code> in slots) to get an
-            object with <code>get(key)</code>, <code>set(key, value, ttlMs?)</code>, and
-            <code>clear()</code>. Keys are strings; values are typed by your generic
-            <code>T</code>. Entries expire automatically after the TTL (milliseconds).
+            receive <strong><code>useCache</code></strong>: a factory that returns an
+            <strong>async</strong> namespaced cache. Call
+            <code>ctx.useCache&lt;T&gt;(namespace, defaultTtlMs)</code> (or
+            <code>context.useCache&lt;T&gt;(namespace, defaultTtlMs)</code> in slots) to
+            get an object with <code>await get(key)</code>,
+            <code>await set(key, value, ttlMs?)</code>, <code>await delete(key)</code>,
+            and <code>await clear()</code>. Keys are strings; values are typed by your
+            generic <code>T</code>. Entries expire automatically after the TTL
+            (milliseconds).
           </p>
           <p>
-            Built-in and third-party code paths share this API: typical usage is to
-            call <code>createCache</code> once in <code>init</code>, keep the returned
-            cache on a module-level variable, and reuse <code>get</code> /
-            <code>set</code> from <code>execute</code> (for example for fetched page
-            excerpts). Prefer <strong>always</strong> using
-            <code>ctx.createCache</code> / <code>context.createCache</code> rather than
-            importing cache helpers from server internals so plugins behave the same in
-            every environment.
+            The <code>namespace</code> is a per-cache discriminator (for example,
+            <code>"ext:my-plugin:articles"</code>). It is combined with the instance's
+            ID internally, so different plugins never collide. When the optional Valkey
+            sidecar is configured (<code>DEGOOG_VALKEY_URL</code>), <code>useCache</code>
+            transparently becomes a shared cache across all replicas of the instance;
+            otherwise it falls back to a per-process in-memory store. The API is
+            identical either way.
+          </p>
+          <p>
+            Typical usage: call <code>useCache</code> once in <code>init</code>, keep
+            the returned cache on a module-level variable, and use
+            <code>await get</code> / <code>await set</code> from <code>execute</code>
+            (for example, for fetched page excerpts). Always prefer
+            <code>ctx.useCache</code> / <code>context.useCache</code> over importing
+            cache helpers from server internals so plugins behave the same in every
+            environment.
           </p>
           <p>
             Store <code>ctx.fetch</code> during <code>init</code> if your plugin
@@ -440,8 +450,9 @@
               <code>clientIp</code>; <code>results</code> (only when
               <code>waitForResults: true</code>); proxy-aware
               <code>fetch(url, init?)</code>; <code>signProxyUrl(url)</code> for
-              external images; and <code>createCache(defaultTtlMs)</code> for the same
-              TTL cache factory as in <code>init(ctx)</code>. Note that the results
+              external images; and <code>useCache(namespace, defaultTtlMs)</code> for the
+              same async TTL cache factory as in <code>init(ctx)</code>. Note that the
+              results
               array is only populated if you set <code>waitForResults: true</code> on
               your plugin.
             </li>
@@ -656,11 +667,11 @@ fetch(MY_API).then(r => r.json()).then(data => { /* ... */ });</code></pre>
   },
 
   init(ctx) {
-    // same ctx as other plugin types: ctx.fetch, ctx.createCache, ctx.readFile
+    // same ctx as other plugin types: ctx.fetch, ctx.useCache, ctx.readFile
   },
 
   async intercept(query, context) {
-    // context: { fetch, createCache, lang }
+    // context: { fetch, useCache, lang }
     // return the query to actually search - may be the original or anything else
     return { query };
   },

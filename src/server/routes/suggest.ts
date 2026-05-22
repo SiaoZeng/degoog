@@ -1,11 +1,11 @@
 import { Hono } from "hono";
 import type { SuggestPostBody } from "../types/search";
 import { guardApiKey } from "../utils/api-key-guard";
-import { asBoolean, asString, getSettings } from "../utils/plugin-settings";
+import { asBoolean, asString } from "../utils/plugin-settings";
 import { checkRateLimit } from "../utils/rate-limit";
 import { getClientIp } from "../utils/request";
 import { getSuggestionsFromProviders } from "../extensions/autocomplete/registry";
-import { getInstanceSettings, setInstanceSettings } from "../utils/server-settings";
+import { getInstanceSettings } from "../utils/server-settings";
 
 async function _applySuggestRateLimit(c: Parameters<typeof getClientIp>[0]) {
   const settings = await getInstanceSettings();

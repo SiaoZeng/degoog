@@ -8,16 +8,15 @@ import { MAX_PAGE } from "../constants";
 import {
   closeMediaPreview,
   destroyMediaObserver,
+  setupMediaObserver,
 } from "../modules/media/media";
 import {
   attachVideoPlayers,
   clearSlotPanels,
   renderPagination,
-  renderResults,
   renderSidebar,
 } from "../modules/renderer/render";
 import { appendMediaCards, renderMediaEngineBar } from "../modules/renderer/render-media";
-import { setupMediaObserver } from "../modules/media/media";
 import { state } from "../state";
 import {
   EngineTiming,

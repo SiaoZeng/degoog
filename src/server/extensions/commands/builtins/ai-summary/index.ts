@@ -7,9 +7,9 @@ import {
   type SlotPlugin,
 } from "../../../../types";
 import {
-  createCache,
+  useCache,
   SHORT_TTL_MS,
-  type TtlCache,
+  type AsyncTtlCache,
 } from "../../../../utils/cache";
 import { logger } from "../../../../utils/logger";
 import { asBoolean, asString, getSettings } from "../../../../utils/plugin-settings";
@@ -126,7 +126,8 @@ function escapeHtml(s: string): string {
 const DEFAULT_SYSTEM_PROMPT =
   "You are a helpful assistant that summarises web search results. Write a concise 2–3 sentence summary answering the query based on the provided snippets. Do not invent facts. Do not include citations.";
 
-const _summaryCache: TtlCache<string> = createCache<string>(SHORT_TTL_MS);
+const SUMMARY_NAMESPACE = "ext:ai-summary:summary";
+const _summaryCache: AsyncTtlCache<string> = useCache<string>(SUMMARY_NAMESPACE, SHORT_TTL_MS);
 
 function _summaryCacheKey(query: string, results: ScoredResult[]): string {
   const fp = results
@@ -238,11 +239,11 @@ const aiSummarySlot: SlotPlugin = {
     const results = context?.results ?? [];
     if (results.length === 0) return { html: "" };
     const key = _summaryCacheKey(query, results);
-    let summary = _summaryCache.get(key);
+    let summary = await _summaryCache.get(key);
     if (summary === null) {
       const generated = await generateAISummary(query, results);
       if (!generated) return { html: "" };
-      _summaryCache.set(key, generated);
+      await _summaryCache.set(key, generated);
       summary = generated;
     }
     return {

@@ -3,6 +3,11 @@ import { dirname } from "path";
 import { randomBytes } from "crypto";
 import { logger } from "./logger";
 import { serverSettingsFile } from "./paths";
+import {
+  INVALIDATE_SCOPE,
+  onInvalidate,
+  publishInvalidate,
+} from "./cache-valkey";
 
 export const WIZARD_ENV_VAR = "DEGOOG_WIZARD";
 
@@ -21,6 +26,11 @@ const _defaults = (): ServerSettings => ({
 });
 
 let _cache: ServerSettings | null = null;
+
+onInvalidate((payload) => {
+  if (payload.scope !== INVALIDATE_SCOPE.SERVER_SETTINGS) return;
+  _cache = null;
+});
 
 const _persist = async (settings: ServerSettings): Promise<void> => {
   const path = serverSettingsFile();
@@ -85,6 +95,7 @@ export const writeServerSettings = async (
   };
   await _persist(next);
   _cache = next;
+  await publishInvalidate(INVALIDATE_SCOPE.SERVER_SETTINGS);
   return next;
 };
 

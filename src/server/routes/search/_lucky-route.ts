@@ -16,7 +16,7 @@ export function registerLuckyRoute(router: Hono): void {
 
     const engines = parseEngineConfig(new URL(c.req.url).searchParams);
     const key = cacheKey(query, engines, "web" as SearchType, 1);
-    let response = cache.get(key);
+    let response = await cache.get(key);
     if (response) {
       const qShort = query.trim().slice(0, 80);
       const enginesOn = Object.values(engines).filter(Boolean).length;
@@ -26,7 +26,7 @@ export function registerLuckyRoute(router: Hono): void {
       );
     } else {
       response = await search(query, engines, "web" as SearchType, 1);
-      cache.set(key, response);
+      await cache.set(key, response);
     }
     const luckyResults = await applyDomainRules(response.results);
     if (luckyResults.length > 0) return c.redirect(luckyResults[0].url);

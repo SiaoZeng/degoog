@@ -377,13 +377,40 @@
                 </div>
               </div>
               <p class="settings-desc">{{t:settings-page.server.cache-desc}}</p>
-              <button
-                class="btn btn--secondary degoog-btn degoog-btn--secondary settings-cache-clear"
-                id="settings-cache-clear"
-                type="button"
-              >
-                {{t:settings-page.server.cache-clear}}
-              </button>
+              <div class="settings-cache-buttons">
+                <button
+                  class="btn btn--secondary degoog-btn degoog-btn--secondary settings-cache-clear"
+                  id="settings-cache-clear-search"
+                  data-cache-scope="search"
+                  type="button"
+                >
+                  {{t:settings-page.server.cache-clear-search}}
+                </button>
+                <button
+                  class="btn btn--secondary degoog-btn degoog-btn--secondary settings-cache-clear"
+                  id="settings-cache-clear-autocomplete"
+                  data-cache-scope="autocomplete"
+                  type="button"
+                >
+                  {{t:settings-page.server.cache-clear-autocomplete}}
+                </button>
+                <button
+                  class="btn btn--secondary degoog-btn degoog-btn--secondary settings-cache-clear"
+                  id="settings-cache-clear-extensions"
+                  data-cache-scope="extensions"
+                  type="button"
+                >
+                  {{t:settings-page.server.cache-clear-extensions}}
+                </button>
+                <button
+                  class="btn btn--secondary degoog-btn degoog-btn--secondary settings-cache-clear"
+                  id="settings-cache-clear-all"
+                  data-cache-scope="all"
+                  type="button"
+                >
+                  {{t:settings-page.server.cache-clear-all}}
+                </button>
+              </div>
             </section>
 
             <section

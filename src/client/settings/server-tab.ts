@@ -502,15 +502,19 @@ export async function initServerTab(
     "settings-page.server.api-key-regenerate-failed",
   );
 
-  handleButtonState(
-    "settings-cache-clear",
-    async () => {
-      const res = await fetch(`${getBase()}/api/cache/clear`, {
-        method: "POST",
-      });
-      if (!res.ok) throw new Error();
-    },
-    "settings-page.server.cache-cleared",
-    "settings-page.server.cache-failed",
-  );
+  const CACHE_SCOPES = ["search", "autocomplete", "extensions", "all"] as const;
+  for (const scope of CACHE_SCOPES) {
+    handleButtonState(
+      `settings-cache-clear-${scope}`,
+      async () => {
+        const res = await fetch(
+          `${getBase()}/api/cache/clear?scope=${scope}`,
+          { method: "POST" },
+        );
+        if (!res.ok) throw new Error();
+      },
+      "settings-page.server.cache-cleared",
+      "settings-page.server.cache-failed",
+    );
+  }
 }

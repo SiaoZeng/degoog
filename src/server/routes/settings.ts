@@ -2,7 +2,7 @@ import { readFile, writeFile } from "fs/promises";
 import { Hono } from "hono";
 import { outgoingFetch } from "../utils/outgoing";
 import { defaultEnginesFile } from "../utils/paths";
-import { asBoolean, asString, getSettings, setSettings } from "../utils/plugin-settings";
+import { asBoolean, asString } from "../utils/plugin-settings";
 import { getRandomUserAgent } from "../utils/user-agents";
 import { DEFAULT_LANGUAGES } from "../utils/search";
 import { getServerKeyHex, regenerateServerKey } from "../utils/server-key";

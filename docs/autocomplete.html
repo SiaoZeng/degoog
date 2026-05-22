@@ -225,12 +225,15 @@
                 </td>
               </tr>
               <tr>
-                <td><code>context.createCache</code></td>
-                <td><code>CreateCache</code></td>
+                <td><code>context.useCache</code></td>
+                <td><code>UseCache</code></td>
                 <td>
-                  A factory function to create a TTL cache instance. Useful for caching
-                  upstream autocomplete API responses natively using the same system
-                  engine results use.
+                  Async, namespaced TTL cache factory. Call
+                  <code>context.useCache&lt;T&gt;(namespace, defaultTtlMs)</code> to get
+                  a cache with <code>await get</code>, <code>await set</code>,
+                  <code>await delete</code>, and <code>await clear</code>. Shared across
+                  replicas when the optional Valkey sidecar is configured; per-process
+                  otherwise.
                 </td>
               </tr>
             </tbody>

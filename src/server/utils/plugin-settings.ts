@@ -1,6 +1,11 @@
 import { readFile, writeFile, mkdir } from "fs/promises";
 import { dirname } from "path";
 import { pluginSettingsFile } from "./paths";
+import {
+  INVALIDATE_SCOPE,
+  onInvalidate,
+  publishInvalidate,
+} from "./cache-valkey";
 
 const SETTINGS_PATH = pluginSettingsFile();
 
@@ -28,6 +33,11 @@ export const settingsAsStrings = (
 
 let cache: PluginSettingsStore | null = null;
 let loadFailed = false;
+
+onInvalidate((payload) => {
+  if (payload.scope !== INVALIDATE_SCOPE.PLUGIN_SETTINGS) return;
+  cache = null;
+});
 
 const load = async (): Promise<PluginSettingsStore> => {
   if (cache) return cache;
@@ -85,6 +95,7 @@ export async function setSettings(
 
   await persist(store);
   loadFailed = false;
+  await publishInvalidate(INVALIDATE_SCOPE.PLUGIN_SETTINGS, id);
 }
 
 export const getAllSettings = async (): Promise<PluginSettingsStore> => {
@@ -112,6 +123,7 @@ export const clearTypeOverride = async (id: string): Promise<void> => {
     delete store[id][TYPE_OVERRIDE_KEY];
     cache = store;
     await persist(store);
+    await publishInvalidate(INVALIDATE_SCOPE.PLUGIN_SETTINGS, id);
   }
 };
 
@@ -121,6 +133,7 @@ export async function removeSettings(id: string): Promise<void> {
     delete store[id];
     cache = store;
     await persist(store);
+    await publishInvalidate(INVALIDATE_SCOPE.PLUGIN_SETTINGS, id);
   }
 }
 

@@ -1,8 +1,8 @@
 import type { Context } from "hono";
-import { asBoolean, didSettingsLoadFail, getSettings } from "./plugin-settings";
+import { asBoolean, didSettingsLoadFail } from "./plugin-settings";
 import { verifySearchNonce } from "./search-nonce";
 import { verifyServerKeyHex } from "./server-key";
-import { getInstanceSettings, setInstanceSettings } from "./server-settings";
+import { getInstanceSettings } from "./server-settings";
 
 const _verifyNonce = (c: Context): boolean => {
   const n = c.req.header("x-search-nonce") ?? c.req.query("searchNonce") ?? "";

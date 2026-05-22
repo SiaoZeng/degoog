@@ -14,13 +14,13 @@ import {
 } from "../../utils/plugin-settings";
 import { autocompleteDir } from "../../utils/paths";
 import { outgoingFetch, parseOutgoingTransport } from "../../utils/outgoing";
-import { autocompleteCache, createCache } from "../../utils/cache";
+import { autocompleteCache, createCache, useCache } from "../../utils/cache";
 import { getTransportNames, getTransportDisplayNames } from "../transports/registry";
 import { createRegistry } from "../registry-factory";
 import { logger } from "../../utils/logger";
-import { buildSignedProxyUrl } from "../../utils/proxy-sign";
+import { signSuggestionThumbnails } from "../../utils/proxy-sign";
 import { getRandomUserAgent } from "../../utils/user-agents";
-import { getInstanceSettings, setInstanceSettings } from "../../utils/server-settings";
+import { getInstanceSettings } from "../../utils/server-settings";
 
 interface PluginEntry {
   id: string;
@@ -122,6 +122,7 @@ async function _buildContext(providerId: string): Promise<AutocompleteContext> {
     lang,
     userAgent: () => getRandomUserAgent(),
     createCache,
+    useCache,
   };
 }
 
@@ -150,13 +151,13 @@ export async function getSuggestionsFromProviders(query: string): Promise<
   }[]
 > {
   const cacheKey = `ac:${query}`;
-  const cached = autocompleteCache.get(cacheKey);
+  const cached = await autocompleteCache.get(cacheKey);
   if (cached) {
     logger.debug(
       "autocomplete",
       `cache hit key="${cacheKey}" qLen=${query.length} suggestions=${cached.length}`,
     );
-    return cached;
+    return signSuggestionThumbnails(cached);
   }
 
   const all = _all();
@@ -276,19 +277,11 @@ export async function getSuggestionsFromProviders(query: string): Promise<
   }
 
   const richMerged: NormItem[] = Array.from(richItems.values()).map(
-    (entry) => {
-      const thumb = entry.rich.thumbnail;
-      return {
-        text: entry.text,
-        source: entry.sources.join(", "),
-        rich: {
-          ...entry.rich,
-          ...(thumb && !thumb.includes("/api/proxy/")
-            ? { thumbnail: buildSignedProxyUrl(thumb) }
-            : {}),
-        },
-      };
-    },
+    (entry) => ({
+      text: entry.text,
+      source: entry.sources.join(", "),
+      rich: { ...entry.rich },
+    }),
   );
 
   const plainMerged: NormItem[] = Array.from(seen.values()).map((entry) => ({
@@ -303,8 +296,8 @@ export async function getSuggestionsFromProviders(query: string): Promise<
     `merged ${merged.length} suggestion(s) (${richMerged.length} rich) for "${query}"`,
   );
 
-  autocompleteCache.set(cacheKey, merged);
-  return merged;
+  await autocompleteCache.set(cacheKey, merged);
+  return signSuggestionThumbnails(merged);
 }
 
 export async function getAutocompleteExtensionMeta(): Promise<ExtensionMeta[]> {

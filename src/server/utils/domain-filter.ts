@@ -1,6 +1,6 @@
 import type { ScoredResult } from "../types";
-import { getSettings, asBoolean, asString } from "./plugin-settings";
-import { getInstanceSettings, setInstanceSettings } from "./server-settings";
+import { asBoolean, asString } from "./plugin-settings";
+import { getInstanceSettings } from "./server-settings";
 
 
 const _matchesDomain = (hostname: string, pattern: string): boolean => {
