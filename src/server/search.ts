@@ -18,7 +18,7 @@ import {
 import { outgoingFetch } from "./utils/outgoing";
 
 const MAX_PAGE = 10;
-const ENGINE_TIMEOUT_MS = 10_000;
+export const DEFAULT_ENGINE_TIMEOUT_MS = 10_000;
 
 const _normalizeUrl = (url: string): string => {
   try {
@@ -199,6 +199,13 @@ const _makeEngineContext = (lang?: string, dateFrom?: string, dateTo?: string): 
   buildAcceptLanguage: () => _buildAcceptLanguage(lang),
 });
 
+export const getEngineTimeoutMs = (engine: SearchEngine): number => {
+  const timeout = engine.timeoutMs ?? DEFAULT_ENGINE_TIMEOUT_MS;
+  return Number.isFinite(timeout) && timeout > 0
+    ? Math.floor(timeout)
+    : DEFAULT_ENGINE_TIMEOUT_MS;
+};
+
 export const searchSingleEngine = async (
   engineName: string,
   query: string,
@@ -221,7 +228,7 @@ export const searchSingleEngine = async (
   try {
     const results = await _withTimeout(
       engine.executeSearch(query, p, timeFilter, engineContext),
-      ENGINE_TIMEOUT_MS,
+      getEngineTimeoutMs(engine),
     );
     const elapsed = Math.round(performance.now() - t0);
     return {
@@ -276,7 +283,7 @@ export const search = async (
       engineStarts[i] = performance.now();
       const results = await _withTimeout(
         engine.executeSearch(query, p, timeFilter, engineContext),
-        ENGINE_TIMEOUT_MS,
+        getEngineTimeoutMs(engine),
       );
       return results;
     }),
@@ -313,10 +320,10 @@ export const search = async (
 
   if (type === "all" && p === 1) {
     [relatedSearches, knowledgePanel] = await Promise.all([
-      _withTimeout(_fetchRelatedSearches(query), ENGINE_TIMEOUT_MS).catch(
+      _withTimeout(_fetchRelatedSearches(query), DEFAULT_ENGINE_TIMEOUT_MS).catch(
         () => [],
       ),
-      _withTimeout(_fetchKnowledgePanel(query), ENGINE_TIMEOUT_MS).catch(
+      _withTimeout(_fetchKnowledgePanel(query), DEFAULT_ENGINE_TIMEOUT_MS).catch(
         () => null,
       ),
     ]);

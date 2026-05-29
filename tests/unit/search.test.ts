@@ -1,9 +1,11 @@
 import { describe, test, expect } from "bun:test";
 import {
   aggregateAndScore,
+  getEngineTimeoutMs,
   mergeNewResults,
   resolveEngine,
 } from "../../src/server/search";
+import { parseEngineConfig } from "../../src/server/routes/search";
 import type { SearchResult, ScoredResult } from "../../src/server/types";
 
 const result = (
@@ -115,6 +117,60 @@ describe("search", () => {
       expect(resolveEngine("nonexistent-engine-xyz")).toBeNull();
       if (orig !== undefined) process.env.DEGOOG_ENGINES_DIR = orig;
       else delete process.env.DEGOOG_ENGINES_DIR;
+    });
+  });
+
+  describe("parseEngineConfig", () => {
+    test("falls back to engine defaults when query parameters are absent", async () => {
+      const { initEngines } =
+        await import("../../src/server/extensions/engines/registry");
+      const orig = process.env.DEGOOG_ENGINES_DIR;
+      process.env.DEGOOG_ENGINES_DIR = "/nonexistent-empty-dir-12345";
+      await initEngines();
+      const config = parseEngineConfig(new URLSearchParams());
+      expect(config.google).toBe(false);
+      expect(config["google-images"]).toBe(false);
+      expect(config.bing).toBe(false);
+      expect(config.duckduckgo).toBe(true);
+      if (orig !== undefined) process.env.DEGOOG_ENGINES_DIR = orig;
+      else delete process.env.DEGOOG_ENGINES_DIR;
+    });
+
+    test("honors explicit image engine query overrides", async () => {
+      const { initEngines } =
+        await import("../../src/server/extensions/engines/registry");
+      const orig = process.env.DEGOOG_ENGINES_DIR;
+      process.env.DEGOOG_ENGINES_DIR = "/nonexistent-empty-dir-12345";
+      await initEngines();
+      const config = parseEngineConfig(
+        new URLSearchParams("google-images=true&bing-images=false"),
+      );
+      expect(config["google-images"]).toBe(true);
+      expect(config["bing-images"]).toBe(false);
+      if (orig !== undefined) process.env.DEGOOG_ENGINES_DIR = orig;
+      else delete process.env.DEGOOG_ENGINES_DIR;
+    });
+  });
+
+
+  describe("getEngineTimeoutMs", () => {
+    test("uses the default timeout when an engine does not override it", () => {
+      expect(
+        getEngineTimeoutMs({
+          name: "Default Engine",
+          executeSearch: async () => [],
+        }),
+      ).toBe(10_000);
+    });
+
+    test("respects an engine-specific timeout override", () => {
+      expect(
+        getEngineTimeoutMs({
+          name: "Slow Engine",
+          timeoutMs: 16_000,
+          executeSearch: async () => [],
+        }),
+      ).toBe(16_000);
     });
   });
 });

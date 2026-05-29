@@ -79,6 +79,31 @@ export class GoogleEngine implements SearchEngine {
     const $ = cheerio.load(html);
     const results: SearchResult[] = [];
 
+    const extractTitle = (linkEl: cheerio.Cheerio<any>): string => {
+      const directText = linkEl
+        .clone()
+        .children()
+        .remove()
+        .end()
+        .text()
+        .replace(/\s+/g, " ")
+        .trim();
+      return (
+        linkEl.find("h3").first().text().trim() ||
+        directText ||
+        linkEl.text().replace(/\s+/g, " ").trim()
+      );
+    };
+
+    const extractSnippet = (linkEl: cheerio.Cheerio<any>): string =>
+      linkEl
+        .parent()
+        .nextAll("div")
+        .first()
+        .text()
+        .replace(/\s+/g, " ")
+        .trim();
+
     const pushResult = (
       title: string,
       href: string,
@@ -100,9 +125,9 @@ export class GoogleEngine implements SearchEngine {
 
     $('a[href^="/url?q="]').each((_, el) => {
       const linkEl = $(el);
-      const title = linkEl.find("span").first().text().trim();
+      const title = extractTitle(linkEl);
       const href = linkEl.attr("href") || "";
-      const snippet = linkEl.parent().next("div").text().trim();
+      const snippet = extractSnippet(linkEl);
       pushResult(title, href, snippet);
     });
 

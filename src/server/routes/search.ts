@@ -2,9 +2,9 @@ import { Hono, type Context } from "hono";
 import * as cache from "../utils/cache";
 import { search, searchSingleEngine, mergeNewResults } from "../search";
 import {
-  getEngineRegistry,
   getEnginesForCustomType,
   getCustomEngineTypes,
+  getDefaultEngineConfig,
 } from "../extensions/engines/registry";
 import { getSlotPlugins } from "../extensions/slots/registry";
 import {
@@ -48,11 +48,14 @@ const _applyRateLimit = async (c: Context): Promise<Response | null> => {
   return null;
 };
 
-function parseEngineConfig(query: URLSearchParams): EngineConfig {
-  const registry = getEngineRegistry();
-  const config: EngineConfig = {};
-  for (const { id } of registry) {
-    config[id] = query.get(id) !== "false";
+export function parseEngineConfig(query: URLSearchParams): EngineConfig {
+  const defaults = getDefaultEngineConfig();
+  const config: EngineConfig = { ...defaults };
+  for (const id of Object.keys(defaults)) {
+    const value = query.get(id);
+    if (value != null) {
+      config[id] = value !== "false";
+    }
   }
   return config;
 }
@@ -259,7 +262,7 @@ router.get("/api/search/retry", async (c) => {
 
   if (cached) {
     const updatedTimings = cached.engineTimings.map((et) =>
-      et.name === engineName ? timing : et,
+      et.name === engineName || et.name === timing.name ? timing : et,
     );
     const merged =
       newResults.length > 0

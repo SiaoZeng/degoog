@@ -45,6 +45,7 @@ export interface SearXNGVariantOptions {
 
 export class SearXNGTypedEngine implements SearchEngine {
   name: string;
+  timeoutMs = 16_000;
   bangShortcut: string;
   private readonly category: string;
   private readonly baseUrl: string;

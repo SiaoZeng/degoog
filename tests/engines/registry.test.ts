@@ -1,6 +1,7 @@
 import { describe, test, expect, beforeAll } from "bun:test";
 import {
   initEngines,
+  getEngineExtensionMeta,
   getEngineMap,
   getEngineRegistry,
   getEnginesForSearchType,
@@ -39,15 +40,25 @@ describe("engines registry", () => {
     expect(engines.some((e) => e.name === "DuckDuckGo")).toBe(true);
   });
 
-  test("getEnginesForSearchType returns array for images type", () => {
+  test("getEnginesForSearchType skips image engines disabled by default", () => {
     const engines = getEnginesForSearchType("images", {});
     expect(Array.isArray(engines)).toBe(true);
+    expect(engines.some((e) => e.name === "Google Images")).toBe(false);
+    expect(engines.some((e) => e.name === "Bing Images")).toBe(true);
   });
 
-  test("getDefaultEngineConfig returns object keyed by engine id", () => {
+  test("getDefaultEngineConfig disables Google by default", () => {
     const config = getDefaultEngineConfig();
     expect(typeof config).toBe("object");
-    expect("duckduckgo" in config || "google" in config).toBe(true);
+    expect(config.google).toBe(false);
+    expect(config.duckduckgo).toBe(true);
+  });
+
+  test("getEngineExtensionMeta exposes defaultEnabled for disabled image engines", async () => {
+    const meta = await getEngineExtensionMeta();
+    const googleImages = meta.find((entry) => entry.id === "google-images");
+    expect(googleImages).toBeDefined();
+    expect(googleImages!.defaultEnabled).toBe(false);
   });
 
   test("getOutgoingAllowlist returns non-empty array", () => {

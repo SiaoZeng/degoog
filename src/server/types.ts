@@ -57,6 +57,7 @@ export interface EngineContext {
 export interface SearchEngine {
   name: string;
   bangShortcut?: string;
+  timeoutMs?: number;
   settingsSchema?: SettingField[];
   configure?(settings: Record<string, string | string[]>): void;
   executeSearch(

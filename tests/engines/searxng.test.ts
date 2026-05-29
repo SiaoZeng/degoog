@@ -106,6 +106,12 @@ describe("combined searxng engines", () => {
     }
   });
 
+  test("web engine advertises a longer timeout than the generic engine default", () => {
+    const engine = new SearXNGEngine();
+    expect(engine.timeoutMs).toBe(16_000);
+  });
+
+
   test("engine degrades to empty results when the backend fetch fails", async () => {
     const engine = new SearXNGEngine();
     const results = await engine.executeSearch("privacy", 1, "any", {

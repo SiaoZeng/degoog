@@ -45,6 +45,7 @@ const BUILTIN_DEFINITIONS: EngineDefinition[] = [
     displayName: "Google",
     searchType: "web",
     EngineClass: GoogleEngine,
+    disabledByDefault: true,
     outgoingHosts: ["www.google.com", "google.com"],
   },
   {
@@ -88,6 +89,7 @@ const BUILTIN_DEFINITIONS: EngineDefinition[] = [
     displayName: "Google Images",
     searchType: "images",
     EngineClass: GoogleImagesEngine,
+    disabledByDefault: true,
     outgoingHosts: ["www.google.com", "google.com"],
   },
   {
@@ -126,7 +128,6 @@ const BUILTIN_DEFINITIONS: EngineDefinition[] = [
     outgoingHosts: ["www.bing.com", "bing.com"],
   },
 ];
-
 const webIds = BUILTIN_DEFINITIONS.filter((d) => d.searchType === "web").map(
   (d) => d.id,
 );
@@ -236,6 +237,15 @@ async function hasRequiredConfig(
   });
 }
 
+function isDefinitionEnabled(
+  def: Pick<EngineDefinition, "id" | "disabledByDefault">,
+  config: EngineConfig,
+): boolean {
+  const configured = config[def.id];
+  if (configured !== undefined) return configured;
+  return def.disabledByDefault !== true;
+}
+
 export function getEnginesForSearchType(
   type: SearchType,
   config: EngineConfig,
@@ -248,19 +258,13 @@ export function getEnginesForSearchType(
     ...pluginEntries.filter((e) => e.searchType === engineType),
   ];
   const engineMap = getEngineMap();
-
-  if (engineType === "web" || engineType === "news") {
-    const active: SearchEngine[] = [];
-    for (const def of allDefinitions) {
-      if (config[def.id]) {
-        const instance = engineMap[def.id];
-        if (instance) active.push(instance);
-      }
-    }
-    return active;
+  const active: SearchEngine[] = [];
+  for (const def of allDefinitions) {
+    if (!isDefinitionEnabled(def, config)) continue;
+    const instance = engineMap[def.id];
+    if (instance) active.push(instance);
   }
-
-  return allDefinitions.map((d) => engineMap[d.id]).filter(Boolean);
+  return active;
 }
 
 export async function getActiveWebEngines(
@@ -273,7 +277,7 @@ export async function getActiveWebEngines(
   const engineMap = getEngineMap();
   const active: SearchEngine[] = [];
   for (const def of allDefinitions) {
-    if (!config[def.id]) continue;
+    if (!isDefinitionEnabled(def, config)) continue;
     const instance = engineMap[def.id];
     if (!instance) continue;
     if (!engineRequiresConfig(instance)) {
@@ -286,15 +290,21 @@ export async function getActiveWebEngines(
 }
 
 export function getDefaultEngineConfig(): Record<string, boolean> {
-  const entries = getEngineRegistry();
+  const allDefinitions = [
+    ...BUILTIN_DEFINITIONS,
+    ...pluginEntries.map((e) => ({
+      id: e.id,
+      disabledByDefault: e.disabledByDefault,
+    })),
+  ];
   const engineMap = getEngineMap();
   return Object.fromEntries(
-    entries.map((e) => {
-      const instance = engineMap[e.id];
+    allDefinitions.map((def) => {
+      const instance = engineMap[def.id];
       const disabledByDefault =
         instance &&
-        (engineRequiresConfig(instance) || e.disabledByDefault === true);
-      return [e.id, !disabledByDefault];
+        (engineRequiresConfig(instance) || def.disabledByDefault === true);
+      return [def.id, !disabledByDefault];
     }),
   );
 }
@@ -306,19 +316,24 @@ export async function getEngineExtensionMeta(): Promise<ExtensionMeta[]> {
       id: e.id,
       displayName: e.displayName,
       searchType: e.searchType,
+      disabledByDefault: e.disabledByDefault,
       instance: e.instance,
     })),
   ];
 
   const engineMap = getEngineMap();
   const results: ExtensionMeta[] = [];
-
   const defaults = getDefaultEngineConfig();
+
   for (const def of allDefs) {
     const instance = engineMap[def.id];
     const schema = instance?.settingsSchema ?? [];
     const rawSettings = schema.length > 0 ? await getSettings(def.id) : {};
     const maskedSettings = maskSecrets(rawSettings, schema);
+    const defaultEnabled =
+      instance != null
+        ? !(engineRequiresConfig(instance) || def.disabledByDefault === true)
+        : defaults[def.id];
 
     results.push({
       id: def.id,
@@ -328,7 +343,7 @@ export async function getEngineExtensionMeta(): Promise<ExtensionMeta[]> {
       configurable: schema.length > 0,
       settingsSchema: schema,
       settings: maskedSettings,
-      defaultEnabled: defaults[def.id],
+      defaultEnabled,
     });
   }
 
@@ -357,6 +372,13 @@ export async function initEngines(): Promise<void> {
       );
     }
   }
+  
+  const redditEngine = builtinMap["reddit"];
+  const braveEngine = builtinMap["brave"];
+  if (redditEngine instanceof RedditEngine && braveEngine) {
+    redditEngine.setFallbackEngine(braveEngine);
+  }
+
 
   const { readdir } = await import("fs/promises");
   const { join } = await import("path");
@@ -421,6 +443,7 @@ export async function initEngines(): Promise<void> {
           displayName: instance.name,
           searchType,
           instance,
+          disabledByDefault: mod.disabledByDefault === true,
           outgoingHosts: pluginHosts,
         });
       } catch (err) {
