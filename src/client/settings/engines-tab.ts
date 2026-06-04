@@ -171,6 +171,19 @@ export async function initEnginesTab(
         <button class="btn btn--secondary degoog-btn degoog-btn--secondary" id="save-default-engines" type="button">${escapeHtml(t("settings-page.extensions.save-defaults"))}</button>
       </div>
     </section>`;
+
+    if (allExtensions.engines.some((engine) => engine.id.includes("searxng"))) {
+      html += `<section class="settings-section ext-card degoog-panel degoog-panel--ext-card">
+        <div class="setting-section-heading-wrapper">
+          <h2 class="settings-section-heading">SearXNG Backend</h2>
+          <div class="floating-section-icon"><i class="fa-solid fa-magnifying-glass"></i></div>
+        </div>
+        <p class="settings-desc">Manage the bundled SearXNG backend engines used by the combined Docker deployment.</p>
+        <div class="settings-page-actions">
+          <a href="${getBase()}/api/plugin/searxng-manager/" class="btn btn--secondary degoog-btn degoog-btn--secondary searxng-manager-link">Manage SearXNG Engines</a>
+        </div>
+      </section>`;
+    }
   }
 
   for (const { label, engines } of groups) {
@@ -203,6 +216,17 @@ export async function initEnginesTab(
           if (ext) openModal(ext);
         });
       });
+
+    const managerLink = container.querySelector<HTMLAnchorElement>(
+      ".searxng-manager-link",
+    );
+    if (managerLink) {
+      const token = sessionStorage.getItem("degoog-settings-token");
+      const href = `${getBase()}/api/plugin/searxng-manager/`;
+      managerLink.href = token
+        ? `${href}?token=${encodeURIComponent(token)}`
+        : href;
+    }
 
     document
       .getElementById("save-default-engines")

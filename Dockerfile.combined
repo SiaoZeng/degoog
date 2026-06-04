@@ -1,0 +1,73 @@
+# Combined degoog + SearXNG container
+# SearXNG runs headless on 127.0.0.1:8888 (internal)
+# degoog serves UI on port 8082 (exposed)
+
+# --- Stage 1: Build SearXNG ---
+FROM python:3.12-alpine@sha256:236173eb74001afe2f60862de935b74fcbd00adfca247b2c27051a70a6a39a2d AS searxng-build
+ARG SEARXNG_REPO=https://github.com/searxng/searxng.git
+ARG SEARXNG_REF=e8299a4c37627c6271ed83227c27cf98021c03f6
+RUN apk add --no-cache git build-base libffi-dev libxml2-dev libxslt-dev
+WORKDIR /searxng
+
+# Fetch a pinned SearXNG revision for reproducible rebuilds
+RUN git init . && \
+    git remote add origin "$SEARXNG_REPO" && \
+    git fetch --depth 1 origin "$SEARXNG_REF" && \
+    git checkout --detach FETCH_HEAD && \
+    pip install --no-cache-dir --prefix=/searxng-install -r requirements.txt && \
+    python -m compileall -q searx
+
+# --- Stage 2: Build degoog ---
+FROM oven/bun:1-alpine AS degoog-build
+WORKDIR /app
+COPY package.json bun.lock* ./
+RUN bun install --frozen-lockfile
+COPY . .
+RUN bun run build
+
+# --- Stage 3: Runtime ---
+FROM python:3.12-alpine@sha256:236173eb74001afe2f60862de935b74fcbd00adfca247b2c27051a70a6a39a2d AS runtime
+
+COPY scripts/install-curl-impersonate.sh /app/
+RUN apk add --no-cache \
+    git ca-certificates su-exec curl bash \
+    libgcc libstdc++ libxml2 libxslt \
+    supervisor && \
+    chmod +x /app/install-curl-impersonate.sh && \
+    /app/install-curl-impersonate.sh && \
+    rm /app/install-curl-impersonate.sh
+
+# SearXNG
+WORKDIR /searxng
+COPY --from=searxng-build /searxng/searx ./searx
+COPY --from=searxng-build /searxng-install /usr/local
+# Use SearXNG's own default settings.yml (includes all 242+ engine definitions)
+RUN mkdir -p /etc/searxng && cp ./searx/settings.yml /etc/searxng/settings.yml
+
+# degoog
+WORKDIR /app
+COPY --from=degoog-build /usr/local/bin/bun /usr/local/bin/bun
+COPY --from=degoog-build /app/node_modules ./node_modules
+COPY --from=degoog-build /app/src ./src
+COPY --from=degoog-build /app/package.json ./package.json
+
+# Default SearXNG engines and manager plugin (synced into data/ on container start)
+COPY combined/engines/ /app/data-default/engines/
+COPY combined/plugins/searxng-manager/index.ts /app/data-default/plugins/searxng-manager/index.ts
+COPY combined/plugins/searxng-manager/page.html /app/data-default/plugins/searxng-manager/page.html
+
+# supervisord config
+COPY supervisord.conf /etc/supervisord.conf
+
+# entrypoint
+COPY entrypoint.combined.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
+ENV DEGOOG_PORT=8082
+ENV SEARXNG_SETTINGS_PATH=/etc/searxng/settings.yml
+EXPOSE 8082
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=40s --retries=3 \
+  CMD curl -fsS "http://127.0.0.1:${DEGOOG_PORT:-8082}/readyz"
+
+ENTRYPOINT ["/entrypoint.sh"]

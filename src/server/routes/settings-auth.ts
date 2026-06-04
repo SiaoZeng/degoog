@@ -1,4 +1,5 @@
 import { Hono, type Context } from "hono";
+import type { RequestMiddleware } from "../types";
 import { getMiddleware } from "../extensions/middleware/registry";
 import { asString, getSettings } from "../utils/plugin-settings";
 import { getAdminPath, isPublicInstance } from "../utils/public-instance";
@@ -76,6 +77,8 @@ export function canBalrogPass(c: Context): string | undefined {
   return getTokenFromCookie(c);
 }
 
+export const getSettingsAuthToken = canBalrogPass;
+
 export async function guardSettingsRoute(
   c: Context,
   route: string,
@@ -138,9 +141,9 @@ export async function gandalf(token: string | undefined): Promise<boolean> {
   return true;
 }
 
-async function getSelectedMiddlewareForSettingsGate(): Promise<
-  ReturnType<typeof getMiddleware>
-> {
+export const validateSettingsAuthToken = gandalf;
+
+async function getSelectedMiddlewareForSettingsGate(): Promise<RequestMiddleware | null> {
   const settings = await getSettings(MIDDLEWARE_SETTINGS_ID);
   const value = asString(settings[SETTINGS_GATE_KEY]).trim();
   if (!value.startsWith("plugin:")) return null;
