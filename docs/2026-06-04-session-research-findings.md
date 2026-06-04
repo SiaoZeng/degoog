@@ -553,53 +553,73 @@ Die finale Re-Review nach den Fixes meldete keine verbleibenden blockierenden od
 
 ## Aktueller Deployment-Zustand
 
-Der laufende Host-Service ist weiterhin die alte Docker-Variante aus:
+Der laufende Host-Service wurde nach Erstellung dieses Dokuments am `2026-06-05` auf den Branch `deploy-combined-upstream` umgestellt. Dieser Branch folgt `origin/port-combined-upstream`.
+
+Deploy-Checkout:
 
 ```text
-/home/jan/gh/degoog/docker-compose.combined.yml
+/home/jan/gh/degoog
+branch: deploy-combined-upstream
+head beim Recreate: a58564b0c101fa35f56486ebd5bbf623e5653aa9
 ```
 
-Beobachteter Container:
+Vor dem Cutover wurde das persistente Datenverzeichnis gesichert:
+
+```text
+/home/jan/tmp/degoog-data-backup-20260605-010440
+```
+
+Beobachteter Container nach Recreate:
 
 ```text
 name: degoog-degoog-1
 image: degoog-degoog
-status: Up 2 days
+status: Up, healthy
 ports: 127.0.0.1:8082->8082/tcp
+container id prefix: dfb5e34167f5
 ```
 
-Der alte Container hat keinen `/readyz`-Endpunkt. Er antwortet aber auf den Legacy-kompatiblen API-Pfad:
+Verifizierte Endpunkte nach Recreate:
 
 ```text
-/api/search?q=degoog&type=all&page=1
+GET http://127.0.0.1:8082/readyz
+=> {\"ok\":true}
+
+GET http://127.0.0.1:8082/api/extensions
+=> SearXNG engine IDs vorhanden: searxng-engine, searxng-images-engine, searxng-videos-engine, searxng-news-engine
+
+GET http://127.0.0.1:8082/api/plugin/searxng-manager/engines
+=> 251 Engines, 31 Kategorien
+
+GET http://127.0.0.1:8082/api/search?q=degoog&type=web&engines=searxng-engine
+=> 32 Ergebnisse, EngineTiming: SearXNG status ok
 ```
 
-Das neue Branch-Image hat den laufenden Container noch nicht ersetzt.
+`dg` wurde nach dem Cutover gegen den neu erstellten Container verifiziert:
+
+```text
+/home/jan/.local/bin/dg -n 3 degoog
+=> 3 Ergebnisse
+
+/home/jan/.local/bin/dg -j -n 2 degoog
+=> JSON-Ausgabe mit SearXNG-Ergebnissen
+```
 
 ## Cutover-Hinweise
 
-Der Cutover ist eine operative Änderung, weil er den lokalen Search-Service ersetzt, den OMP-Research-Flows verwenden.
+Der Cutover wurde am `2026-06-05` durchgeführt. Die folgenden Punkte bleiben für spätere Recreates oder Rollbacks relevant.
 
-### Checks vor Cutover
+### Checks vor einem erneuten Recreate
 
-1. Prüfen, dass keine wichtigen lokalen Änderungen in `/home/jan/gh/degoog` fehlen, die nicht im neuen Branch enthalten sind.
+1. Prüfen, dass `/home/jan/gh/degoog` auf `deploy-combined-upstream` oder einem bewusst gewählten Nachfolgebranch steht.
 2. Prüfen, dass `/home/jan/PORTS.md` weiterhin `8082` für degoog reserviert und `8888` nur als interne SearXNG-Adresse behandelt.
-3. Neues Image vom Branch `port-combined-upstream` bauen.
-4. Smoke-Container zuerst auf einem temporären Host-Port testen.
-5. Verifizieren:
+3. Vor `docker compose up --build --force-recreate` ein Backup von `/home/jan/gh/degoog/data` erstellen.
+4. Nach dem Recreate verifizieren:
    - `/readyz`
    - `/api/extensions`
    - `/api/plugin/searxng-manager/engines`
-   - `/api/search?q=degoog&type=web`
+   - `/api/search?q=degoog&type=web&engines=searxng-engine`
    - `/home/jan/.local/bin/dg -n 3 degoog`
-
-### Cutover-Ablauf auf hoher Ebene
-
-1. alten Compose-Service aus `/home/jan/gh/degoog` stoppen
-2. neuen Compose-Service aus dem neuen Branch oder nach Merge in den Ziel-Checkout starten
-3. `127.0.0.1:8082` prüfen
-4. `dg` prüfen
-5. Rollback-Pfad offen halten, bis Smoke-Tests erfolgreich sind
 
 ### Rollback-Ablauf auf hoher Ebene
 
