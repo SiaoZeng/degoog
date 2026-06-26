@@ -227,7 +227,8 @@
       "password-placeholder": "Mot de passe",
       "unlock": "Déverrouiller",
       "incorrect-password": "Mot de passe incorrect.",
-      "network-error": "Une erreur s'est produite. Réessayez."
+      "network-error": "Une erreur s'est produite. Réessayez.",
+      "generated-password-note": "Utilisez le mot de passe temporaire affiché dans les logs du serveur, définissez DEGOOG_SETTINGS_PASSWORDS pour en garder un stable, ou activez DEGOOG_DANGEROUSLY_NO_PASSWORD=true uniquement sur un réseau local de confiance."
     },
     "public": {
       "engines-heading": "Moteurs"

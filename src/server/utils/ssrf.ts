@@ -10,15 +10,27 @@ const RESERVED_IPV4 = new RegExp(
     "^169\\.254\\.",
     "^172\\.(?:1[6-9]|2\\d|3[01])\\.",
     "^192\\.168\\.",
+    "^192\\.0\\.0\\.",
+    "^192\\.0\\.2\\.",
+    "^198\\.1[89]\\.",
+    "^198\\.51\\.100\\.",
+    "^203\\.0\\.113\\.",
     "^100\\.(?:6[4-9]|[7-9]\\d|1[01]\\d|12[0-7])\\.",
     "^(?:22[4-9]|2[3-5]\\d)\\.",
+    "^255\\.255\\.255\\.255$",
   ].join("|"),
 );
 
-const RESERVED_IPV6 = /^(?:::1|::|fe80|f[cd]|ff)/i;
+const RESERVED_IPV6 = /^(?:::1|::|fe80|f[cd]|ff|64:ff9b:|::ffff:)/i;
 const MAPPED_IPV4 = /^::ffff:(\d+\.\d+\.\d+\.\d+)$/i;
 
 const strip = (host: string): string => host.replace(/^\[|\]$/g, "");
+
+const looksNumericHost = (host: string): boolean => {
+  const labels = host.split(".");
+  const tld = labels[labels.length - 1] ?? "";
+  return !/^[a-zA-Z]/.test(tld);
+};
 
 export const isBlockedIp = (host: string): boolean => {
   const ip = strip(host).toLowerCase();
@@ -108,15 +120,23 @@ export const isSafeHost = async (
     youShallNotPass(host);
     return false;
   }
+  if (looksNumericHost(bare)) {
+    youShallNotPass(host);
+    return false;
+  }
   try {
     const records = await lookup(host, { all: true });
     const addresses = records.map((r) => r.address);
+    if (addresses.length === 0) {
+      youShallNotPass(host);
+      return false;
+    }
     if (!addresses.some((a) => isBlockedIp(a))) return true;
     if (onAllowList([host, ...addresses], access)) return true;
     youShallNotPass(host);
     return false;
   } catch (err) {
     logger.debug("proxy", `DNS lookup failed for ${host}`, err);
-    return true;
+    return false;
   }
 };

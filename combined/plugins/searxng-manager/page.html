@@ -153,16 +153,6 @@
   saveBtn.addEventListener("click", saveChanges);
 
   function getStoredToken() {
-    var tokenFromUrl = new URLSearchParams(window.location.search).get("token");
-    if (tokenFromUrl) {
-      try {
-        sessionStorage.setItem(TOKEN_KEY, tokenFromUrl);
-      } catch (_err) {}
-      if (window.location.search.indexOf("token=") !== -1) {
-        window.history.replaceState({}, "", window.location.pathname);
-      }
-      return tokenFromUrl;
-    }
     try {
       return sessionStorage.getItem("degoog-settings-token");
     } catch (_err) {

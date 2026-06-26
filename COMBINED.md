@@ -110,7 +110,7 @@ Restart Policy: `unless-stopped` — startet automatisch nach Reboot.
 
 ## Build-Reproduzierbarkeit
 
-`Dockerfile.combined` pinnt SearXNG auf Commit `e8299a4c37627c6271ed83227c27cf98021c03f6`, nutzt upstreams Bun-1-Alpine Runtime-Pfad und installiert wie upstream `curl-impersonate` für die neuen Transport-Optionen.
+`Dockerfile.combined` pinnt SearXNG auf Commit `e3126b89e69d1a56488f54f27928581a897cb058`, nutzt upstreams Bun-1-Alpine Runtime-Pfad und installiert wie upstream `curl-impersonate` für die neuen Transport-Optionen.
 
 ## Env-Variablen
 

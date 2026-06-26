@@ -2,7 +2,7 @@ import { describe, test, expect } from "bun:test";
 import { isBlockedIp, isSafeHost } from "../../src/server/utils/ssrf";
 
 describe("ssrf isBlockedIp", () => {
-  test("blocks loopback, private, link-local, unspecified", () => {
+  test("blocks loopback, private, link-local, unspecified, and reserved documentation ranges", () => {
     for (const ip of [
       "127.0.0.1",
       "10.0.0.5",
@@ -11,13 +11,17 @@ describe("ssrf isBlockedIp", () => {
       "169.254.10.10",
       "0.0.0.0",
       "100.64.0.1",
+      "192.0.2.1",
+      "198.51.100.2",
+      "203.0.113.3",
+      "255.255.255.255",
     ]) {
       expect(isBlockedIp(ip)).toBe(true);
     }
   });
 
-  test("blocks IPv6 loopback, link-local, unique-local, mapped", () => {
-    for (const ip of ["::1", "::", "fe80::1", "fc00::1", "::ffff:127.0.0.1"]) {
+  test("blocks IPv6 loopback, link-local, unique-local, mapped, and NAT64 prefixes", () => {
+    for (const ip of ["::1", "::", "fe80::1", "fc00::1", "::ffff:127.0.0.1", "64:ff9b::c000:201"]) {
       expect(isBlockedIp(ip)).toBe(true);
     }
   });
@@ -61,5 +65,14 @@ describe("ssrf isSafeHost", () => {
     expect(
       await isSafeHost("192.168.1.5", { enabled: false, patterns: ["^192\\."] }),
     ).toBe(false);
+  });
+
+  test("rejects numeric-literal hosts disguised as domain names", async () => {
+    expect(await isSafeHost("2130706433")).toBe(false);
+    expect(await isSafeHost("0x7f000001")).toBe(false);
+  });
+
+  test("fails closed when a hostname cannot be resolved", async () => {
+    expect(await isSafeHost("definitely-not-a-real-host.invalid")).toBe(false);
   });
 });

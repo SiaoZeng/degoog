@@ -21,6 +21,16 @@ export function getClientIp(c: Context): string | undefined {
   return env?.requestIP?.(c.req.raw)?.address ?? undefined;
 }
 
+export function getSocketIp(c: Context): string | undefined {
+  const env = c.env as BunEnv | undefined;
+  return env?.requestIP?.(c.req.raw)?.address ?? undefined;
+}
+
+export function isLoopbackClient(c: Context): boolean {
+  const ip = getSocketIp(c)?.replace(/^::ffff:/, "");
+  return ip === "127.0.0.1" || ip === "::1";
+}
+
 export function isHttpsRequest(c: Context): boolean {
   if (!_distrustProxy()) {
     const proto = c.req.header("x-forwarded-proto");

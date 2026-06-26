@@ -19,6 +19,7 @@ import globalRouter from "./routes";
 import { markReady } from "./routes/health";
 import { build404 } from "./routes/pages";
 import { initServerKey } from "./utils/server-key";
+import { logSettingsPasswordStatus } from "./routes/settings-auth";
 import { initValkey } from "./utils/cache-valkey";
 import { getInstanceId } from "./utils/server-settings";
 import { runMigrations } from "./migrations";
@@ -121,6 +122,7 @@ Promise.all([initServerKey(), initExtensionRegistries()])
   .then(() => {
     Bun.serve({ port, fetch: app.fetch, idleTimeout: 120 });
     markReady();
+    logSettingsPasswordStatus();
   })
   .catch((err) => {
     console.error("[startup] initialization failed", err);

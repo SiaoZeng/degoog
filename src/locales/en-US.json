@@ -244,7 +244,8 @@
       "unlock": "Unlock",
       "incorrect-password": "Incorrect password.",
       "network-error": "Something went wrong. Please try again.",
-      "misconfigured": "Settings authentication is misconfigured: the configured gate references a middleware that is not loaded. Contact the administrator to fix the gate setting or set DEGOOG_SETTINGS_PASSWORDS."
+      "misconfigured": "Settings authentication is misconfigured: the configured gate references a middleware that is not loaded. Contact the administrator to fix the gate setting or set DEGOOG_SETTINGS_PASSWORDS.",
+      "generated-password-note": "Use the temporary password printed in the server logs, set DEGOOG_SETTINGS_PASSWORDS for a stable one, or set DEGOOG_DANGEROUSLY_NO_PASSWORD=true only on a trusted local network."
     },
     "public": {
       "engines-heading": "Engines"

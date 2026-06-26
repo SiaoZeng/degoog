@@ -227,7 +227,8 @@
       "password-placeholder": "סיסמה",
       "unlock": "שחרר נעילה",
       "incorrect-password": "סיסמה שגויה.",
-      "network-error": "משהו השתבש. אנא נסה שוב."
+      "network-error": "משהו השתבש. אנא נסה שוב.",
+      "generated-password-note": "השתמש בסיסמה הזמנית שמודפסת בלוגי השרת, הגדר DEGOOG_SETTINGS_PASSWORDS לסיסמה קבועה, או הגדר DEGOOG_DANGEROUSLY_NO_PASSWORD=true רק ברשת מקומית מהימנה."
     },
     "public": {
       "engines-heading": "מנועים"

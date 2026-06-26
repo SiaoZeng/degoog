@@ -180,6 +180,8 @@ router.get("/api/proxy/image", async (c) => {
       "Content-Type": contentType,
       "Cache-Control": "public, max-age=86400",
       "X-Content-Type-Options": "nosniff",
+      "Content-Security-Policy":
+        "default-src 'none'; sandbox; style-src 'unsafe-inline'",
       "Content-Disposition": `inline; filename="${getProxyFilename(url, contentType)}"`,
     });
   } catch {
@@ -190,7 +192,8 @@ router.get("/api/proxy/image", async (c) => {
 
 const FAVICON_TIMEOUT_MS = 5_000;
 const FAVICON_MAX_CONTENT_LENGTH = 512 * 1024;
-const FAVICON_CONTENT_TYPES = ["image/", "text/html"];
+const FAVICON_CONTENT_TYPES = ["image/"];
+const FAVICON_NO_LOCAL: LocalImageAccess = { enabled: false, patterns: [] };
 
 router.get("/api/proxy/favicon", async (c) => {
   const domain = c.req.query("domain")?.trim();
@@ -207,13 +210,13 @@ router.get("/api/proxy/favicon", async (c) => {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), FAVICON_TIMEOUT_MS);
     try {
-      const res = await outgoingFetch(faviconUrl, {
+      const res = await followRedirects(faviconUrl, {
         signal: controller.signal,
         headers: { "User-Agent": getRandomUserAgent() },
-        redirect: "follow",
+        access: FAVICON_NO_LOCAL,
       });
       clearTimeout(timeout);
-      if (!res.ok) continue;
+      if (!res || !res.ok) continue;
       const contentType = res.headers.get("content-type")?.split(";")[0]?.trim() ?? "";
       if (!FAVICON_CONTENT_TYPES.some((t) => contentType.startsWith(t))) continue;
       const body = await readBodyCapped(res, FAVICON_MAX_CONTENT_LENGTH);
@@ -221,6 +224,8 @@ router.get("/api/proxy/favicon", async (c) => {
       return c.body(body, 200, {
         "Content-Type": contentType || "image/x-icon",
         "Cache-Control": "public, max-age=86400",
+        "Content-Security-Policy":
+          "default-src 'none'; sandbox; style-src 'unsafe-inline'",
         "X-Content-Type-Options": "nosniff",
       });
     } catch {

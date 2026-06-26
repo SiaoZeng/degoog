@@ -15,4 +15,6 @@ services:
       - SEARXNG_BIND_ADDRESS=127.0.0.1
       - SEARXNG_SECRET=degoog-searxng-local
       - SEARXNG_IMAGE_PROXY=true
+      # Uncomment to keep a stable settings/admin password instead of the generated temporary one.
+      # - DEGOOG_SETTINGS_PASSWORDS=change-me
     restart: unless-stopped

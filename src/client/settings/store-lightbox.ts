@@ -5,10 +5,9 @@ export const screenshotUrl = (
   type: string,
   itemSlug: string,
   filename: string,
-  token: string | null,
+  _token?: string | null,
 ): string => {
-  const q = token ? `?token=${encodeURIComponent(token)}` : "";
-  return `${getBase()}/api/store/screenshots/${encodeURIComponent(repoSlug)}/${encodeURIComponent(type)}/${encodeURIComponent(itemSlug)}/${encodeURIComponent(filename)}${q}`;
+  return `${getBase()}/api/store/screenshots/${encodeURIComponent(repoSlug)}/${encodeURIComponent(type)}/${encodeURIComponent(itemSlug)}/${encodeURIComponent(filename)}`;
 };
 
 export const buildScreenshotUrls = (

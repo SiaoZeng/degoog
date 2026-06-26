@@ -221,11 +221,7 @@ export async function initEnginesTab(
       ".searxng-manager-link",
     );
     if (managerLink) {
-      const token = sessionStorage.getItem("degoog-settings-token");
-      const href = `${getBase()}/api/plugin/searxng-manager/`;
-      managerLink.href = token
-        ? `${href}?token=${encodeURIComponent(token)}`
-        : href;
+      managerLink.href = `${getBase()}/api/plugin/searxng-manager/`;
     }
 
     document

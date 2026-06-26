@@ -269,12 +269,6 @@ async function _init(): Promise<void> {
     return;
   }
   void initTheme();
-  const params = new URLSearchParams(window.location.search);
-  const tokenFromUrl = params.get("token");
-  if (tokenFromUrl) {
-    sessionStorage.setItem(TOKEN_KEY, tokenFromUrl);
-    window.history.replaceState({}, "", getSettingsRoot());
-  }
   const auth = await _checkAuth();
   if (auth.required && !auth.valid) {
     if (auth.error === "auth-misconfigured") {

@@ -1,11 +1,12 @@
 import { Hono, type Context } from "hono";
+import { randomBytes } from "node:crypto";
 import type { RequestMiddleware } from "../types";
 import { getMiddleware } from "../extensions/middleware/registry";
 import { asString, getSettings } from "../utils/plugin-settings";
 import { getAdminPath, isPublicInstance } from "../utils/public-instance";
 import { logger } from "../utils/logger";
 import { getBasePath } from "../utils/base-url";
-import { getClientIp, isHttpsRequest } from "../utils/request";
+import { getClientIp, isHttpsRequest, isLoopbackClient } from "../utils/request";
 import {
   TOKEN_TTL_MS,
   checkAuthRate,
@@ -20,6 +21,47 @@ const router = new Hono();
 const COOKIE_NAME = "settings-token";
 const MIDDLEWARE_SETTINGS_ID = "middleware";
 const SETTINGS_GATE_KEY = "settingsGate";
+
+const GENERATED_PASSWORD = randomBytes(24).toString("base64url");
+
+const _envTruthy = (name: string): boolean => {
+  const value = (process.env[name] ?? "").trim().toLowerCase();
+  return value === "true" || value === "1" || value === "yes";
+};
+
+export const isDangerouslyNoPassword = (): boolean =>
+  _envTruthy("DEGOOG_DANGEROUSLY_NO_PASSWORD");
+
+const _explicitPasswords = (): string[] => {
+  const raw = process.env.DEGOOG_SETTINGS_PASSWORDS ?? "";
+  return raw
+    .split(",")
+    .map((p) => p.trim())
+    .filter(Boolean);
+};
+
+export const hasGeneratedDefaultSettingsPassword = (): boolean =>
+  _explicitPasswords().length === 0 && !isDangerouslyNoPassword();
+
+export function logSettingsPasswordStatus(): void {
+  const explicit = _explicitPasswords();
+  if (explicit.length > 0) return;
+  if (isDangerouslyNoPassword()) {
+    logger.warn(
+      "server",
+      "DEGOOG_DANGEROUSLY_NO_PASSWORD is enabled: settings/admin authentication is disabled. Only use this on a trusted local network.",
+    );
+    return;
+  }
+  logger.warn(
+    "server",
+    `DEGOOG_SETTINGS_PASSWORDS is not set. Generated temporary settings password for this process: ${GENERATED_PASSWORD}`,
+  );
+  logger.warn(
+    "server",
+    "Set DEGOOG_SETTINGS_PASSWORDS to choose a stable password, or set DEGOOG_DANGEROUSLY_NO_PASSWORD=true to intentionally disable settings/admin authentication.",
+  );
+}
 
 const buildSessionCookie = (token: string, secure: boolean): string => {
   const attrs = [
@@ -69,11 +111,6 @@ export function canBalrogPass(c: Context): string | undefined {
     logger.debug("settings-auth", "token source: x-settings-token header");
     return fromHeader;
   }
-  const fromQuery = c.req.query("token");
-  if (fromQuery) {
-    logger.debug("settings-auth", "token source: query param");
-    return fromQuery;
-  }
   return getTokenFromCookie(c);
 }
 
@@ -101,11 +138,10 @@ export async function shouldServeSettingsGate(c: Context): Promise<boolean> {
 }
 
 function getPasswords(): string[] {
-  const raw = process.env.DEGOOG_SETTINGS_PASSWORDS ?? "";
-  return raw
-    .split(",")
-    .map((p) => p.trim())
-    .filter(Boolean);
+  const explicit = _explicitPasswords();
+  if (explicit.length > 0) return explicit;
+  if (isDangerouslyNoPassword()) return [];
+  return [GENERATED_PASSWORD];
 }
 
 export function isPasswordRequired(): boolean {
@@ -113,7 +149,8 @@ export function isPasswordRequired(): boolean {
 }
 
 export async function gandalf(token: string | undefined): Promise<boolean> {
-  if (isPublicInstance() && !isPasswordRequired()) return false;
+  if (isPublicInstance() && !isPasswordRequired() && !isDangerouslyNoPassword())
+    return false;
   const required = await isAuthRequired();
   if (!required) return true;
   if (!token) {
@@ -142,6 +179,31 @@ export async function gandalf(token: string | undefined): Promise<boolean> {
 }
 
 export const validateSettingsAuthToken = gandalf;
+
+export async function guardPrivilegedAction(
+  c: Context,
+  route: string,
+): Promise<Response | null> {
+  const denied = c.json(
+    {
+      error:
+        "This action runs code or deletes data and requires authentication. Set DEGOOG_SETTINGS_PASSWORDS (or a settings gate), or perform it locally.",
+    },
+    401,
+  );
+  if (await isAuthRequired()) {
+    return (await gandalf(canBalrogPass(c))) ? null : denied;
+  }
+  if (isPublicInstance()) return denied;
+  if (!isLoopbackClient(c)) {
+    logger.warn(
+      "settings-auth",
+      `403 on ${route}: privileged action from non-loopback with no auth configured`,
+    );
+    return denied;
+  }
+  return null;
+}
 
 async function getSelectedMiddlewareForSettingsGate(): Promise<RequestMiddleware | null> {
   const settings = await getSettings(MIDDLEWARE_SETTINGS_ID);
@@ -207,7 +269,7 @@ router.get("/api/settings/auth/callback", async (c) => {
 });
 
 router.post("/api/settings/auth", async (c) => {
-  if (isPublicInstance() && !isPasswordRequired())
+  if (isPublicInstance() && !isPasswordRequired() && !isDangerouslyNoPassword())
     return c.json({ error: "You shall not pass!" }, 401);
   const ip = getClientIp(c) ?? "unknown";
   const rate = checkAuthRate(ip);

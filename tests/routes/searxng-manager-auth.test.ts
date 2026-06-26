@@ -97,7 +97,9 @@ describe("routes/searxng-manager auth", () => {
     expect(authBody.token).toBeTruthy();
 
     const res = await getRoute("get", "/").handler(
-      new Request("http://localhost/api/plugin/searxng-manager/?token=" + authBody.token),
+      new Request("http://localhost/api/plugin/searxng-manager/", {
+        headers: { "x-settings-token": authBody.token! },
+      }),
     );
 
     expect(res.status).toBe(200);
@@ -147,13 +149,13 @@ describe("routes/searxng-manager auth", () => {
     expect(body.engines[0]?.name).toBe("google");
   });
 
-  test("manager page forwards the settings token, accepts token query fallback, and handles unauthorized responses", async () => {
+  test("manager page forwards the stored settings token in request headers and handles unauthorized responses", async () => {
     const pageUrl = new URL("../../combined/plugins/searxng-manager/page.html", import.meta.url);
     const page = await file(pageUrl).text();
 
     expect(page).toContain('sessionStorage.getItem("degoog-settings-token")');
-    expect(page).toContain('new URLSearchParams(window.location.search).get("token")');
-    expect(page).toContain('sessionStorage.setItem(TOKEN_KEY, tokenFromUrl);');
+    expect(page).not.toContain('new URLSearchParams(window.location.search).get("token")');
+    expect(page).not.toContain('sessionStorage.setItem(TOKEN_KEY, tokenFromUrl);');
     expect(page).toContain('headers["x-settings-token"] = token');
     expect(page).toContain("Unauthorized: open Settings and unlock access first.");
   });

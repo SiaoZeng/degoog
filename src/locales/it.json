@@ -227,7 +227,8 @@
       "password-placeholder": "Password",
       "unlock": "Sblocca",
       "incorrect-password": "Password errata.",
-      "network-error": "Si è verificato un errore. Riprova."
+      "network-error": "Si è verificato un errore. Riprova.",
+      "generated-password-note": "Usa la password temporanea stampata nei log del server, imposta DEGOOG_SETTINGS_PASSWORDS per renderla stabile, oppure imposta DEGOOG_DANGEROUSLY_NO_PASSWORD=true solo su una rete locale fidata."
     },
     "public": {
       "engines-heading": "Motori"

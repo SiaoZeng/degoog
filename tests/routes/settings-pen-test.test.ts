@@ -90,14 +90,16 @@ describe("public instance - no password", () => {
     expect(html).toContain("settings-page");
   });
 
-  test("GET /admin returns 404 - does not reveal admin exists", async () => {
+  test("GET /admin returns 200 with the auth gate when a generated password is active", async () => {
     const res = await pagesRouter.request("http://localhost/admin");
-    expect(res.status).toBe(404);
+    expect(res.status).toBe(200);
+    expect(await res.text()).toContain("settings-auth");
   });
 
-  test("GET /admin/:tab returns 404", async () => {
+  test("GET /admin/:tab returns 200 with the auth gate when a generated password is active", async () => {
     const res = await pagesRouter.request("http://localhost/admin/general");
-    expect(res.status).toBe(404);
+    expect(res.status).toBe(200);
+    expect(await res.text()).toContain("settings-auth");
   });
 
   test("public settings HTML has no reference to the admin path", async () => {
