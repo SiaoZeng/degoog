@@ -1,6 +1,8 @@
 import { describe, test, expect, beforeAll } from "bun:test";
 import {
   initEngines,
+  getDefaultEngineConfig,
+  getEngineExtensionMeta,
   getEngineMap,
   primaryType,
   resolveTabSearchType,
@@ -36,6 +38,24 @@ describe("engines registry", () => {
     expect(resolveTabSearchType(types, "third")).toBe("third");
     expect(resolveTabSearchType(types, "web")).toBe("web");
     expect(resolveTabSearchType(types)).toBe("web");
+  });
+
+  test("extension metadata defaultEnabled matches registry defaults", async () => {
+    const orig = process.env.DEGOOG_ENGINES_DIR;
+    delete process.env.DEGOOG_ENGINES_DIR;
+    await initEngines(true);
+    try {
+      const defaults = getDefaultEngineConfig();
+      const meta = await getEngineExtensionMeta();
+      expect(meta.length).toBeGreaterThan(0);
+      for (const entry of meta) {
+        expect(entry.defaultEnabled).toBe(defaults[entry.id]);
+      }
+    } finally {
+      if (orig !== undefined) process.env.DEGOOG_ENGINES_DIR = orig;
+      else process.env.DEGOOG_ENGINES_DIR = "/nonexistent-dir-for-tests";
+      await initEngines(true);
+    }
   });
 
 });

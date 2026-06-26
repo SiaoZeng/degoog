@@ -114,7 +114,7 @@ export async function handleRetry(
 
   if (cached) {
     const updatedTimings = cached.engineTimings.map((et) =>
-      et.name === engineName ? timing : et,
+      et.name === engineName || et.name === timing.name ? timing : et,
     );
     const merged =
       newResults.length > 0

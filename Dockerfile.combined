@@ -18,7 +18,7 @@ RUN git init . && \
     python -m compileall -q searx
 
 # --- Stage 2: Build degoog ---
-FROM oven/bun:1-alpine AS degoog-build
+FROM oven/bun:1-alpine@sha256:26d8996560ca94eab9ce48afc0c7443825553c9a851f40ae574d47d20906826d AS degoog-build
 WORKDIR /app
 COPY package.json bun.lock* ./
 RUN bun install --frozen-lockfile
