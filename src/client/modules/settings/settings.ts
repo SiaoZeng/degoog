@@ -4,15 +4,20 @@ import { initInstallPrompt } from "../../utils/install-prompt";
 import {
   initGeneralTab,
   initAppearanceSettings,
-} from "../../settings/general-tab";
-import { initEnginesTab } from "../../settings/engines-tab";
-import { initPluginsTab } from "../../settings/plugins-tab";
-import { initTransportsTab } from "../../settings/transports-tab";
-import { initAutocompleteTab } from "../../settings/autocomplete-tab";
-import { initThemesTab } from "../../settings/themes-tab";
-import { initServerTab } from "../../settings/server-tab";
-import { initStoreTab } from "../../settings/store-tab";
-import { initGlobalSearch } from "../../settings/settings-search";
+  renderPublicSettingsTop,
+} from "../../settings/general/tab";
+import { initEnginesTab } from "../../settings/engines/tab";
+import { initPluginsTab } from "../../settings/plugins/tab";
+import { initTransportsTab } from "../../settings/transports/tab";
+import { initAutocompleteTab } from "../../settings/autocomplete/tab";
+import { initThemesTab } from "../../settings/themes/tab";
+import { initServerTab } from "../../settings/server/tab";
+import { initStoreTab } from "../../settings/store/tab";
+import { initGlobalSearch } from "../../settings/shared/settings-search";
+import {
+  getStoredToken as _getStoredToken,
+  SETTINGS_TOKEN_KEY,
+} from "../../utils/settings-token";
 import { initSettingsWizard } from "../wizard/wizard";
 import "../modals/settings-modal/modal";
 import type { AllExtensions } from "../../types";
@@ -33,8 +38,6 @@ declare global {
 
 const t = window.scopedT("core");
 
-const TOKEN_KEY = "degoog-settings-token";
-
 function _initSettingsBackLink(): void {
   document.body.addEventListener("click", (e) => {
     const a = (e.target as HTMLElement).closest<HTMLAnchorElement>(
@@ -46,8 +49,7 @@ function _initSettingsBackLink(): void {
   });
 }
 
-export const getStoredToken = (): string | null =>
-  sessionStorage.getItem(TOKEN_KEY) || null;
+export const getStoredToken = _getStoredToken;
 
 const _checkAuth = async (): Promise<{
   required: boolean;
@@ -83,6 +85,9 @@ function _showAuthMisconfigured(): void {
     </header>
     <div class="settings-auth-gate">
       <div class="settings-auth-gate-inner">
+        <span class="settings-auth-lock settings-auth-lock--warn" aria-hidden="true">
+          <i class="fa-solid fa-triangle-exclamation"></i>
+        </span>
         <p class="settings-auth-desc">${t("settings-page.gate.misconfigured")}</p>
       </div>
     </div>`;
@@ -103,6 +108,9 @@ function _showAuthGate(): void {
     </header>
     <div class="settings-auth-gate">
       <div class="settings-auth-gate-inner">
+        <span class="settings-auth-lock" aria-hidden="true">
+          <i class="fa-solid fa-lock"></i>
+        </span>
         <p class="settings-auth-desc">${t("settings-page.gate.desc")}</p>
         <form class="settings-auth-form" id="settings-auth-form" autocomplete="off">
           <input class="settings-auth-input" type="password" id="settings-auth-input" placeholder="${t("settings-page.gate.password-placeholder")}" autocomplete="current-password" autofocus>
@@ -131,7 +139,7 @@ function _showAuthGate(): void {
         });
         const data = (await res.json()) as { ok?: boolean; token?: string };
         if (data.ok && data.token) {
-          sessionStorage.setItem(TOKEN_KEY, data.token);
+          sessionStorage.setItem(SETTINGS_TOKEN_KEY, data.token);
           window.location.reload();
         } else {
           if (errorEl)
@@ -245,11 +253,15 @@ window.addEventListener("extensions-saved", async () => {
     initTransportsTab(allExtensions);
     initAutocompleteTab(allExtensions);
     await initThemesTab(themesData, allExtensions.themes ?? []);
-  } catch {}
+  } catch (err) {
+    console.warn("[settings] extension tabs refresh failed", err);
+  }
 });
 
 async function _initPublicSettings(): Promise<void> {
   void initTheme();
+  const publicContent = document.getElementById("public-settings-content");
+  if (publicContent) publicContent.innerHTML = renderPublicSettingsTop();
   void initAppearanceSettings();
   try {
     const res = await fetch(`${getBase()}/api/extensions`);
@@ -269,6 +281,12 @@ async function _init(): Promise<void> {
     return;
   }
   void initTheme();
+  const params = new URLSearchParams(window.location.search);
+  const tokenFromUrl = params.get("token");
+  if (tokenFromUrl) {
+    sessionStorage.setItem(SETTINGS_TOKEN_KEY, tokenFromUrl);
+    window.history.replaceState({}, "", getSettingsRoot());
+  }
   const auth = await _checkAuth();
   if (auth.required && !auth.valid) {
     if (auth.error === "auth-misconfigured") {

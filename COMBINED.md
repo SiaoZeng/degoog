@@ -2,7 +2,7 @@
 
 ## Überblick
 
-Self-hosted Search-Stack: **degoog** (Bun/TypeScript UI) + **SearXNG** (Python, 242+ Engines) in einem Docker-Container. Dazu CLI-Tool `dg`.
+Self-hosted Search-Stack: **degoog** (Bun/TypeScript UI) + **SearXNG** (Python/Flask UI-less backend) in einem Docker-Container. Dazu CLI-Tool `dg`.
 
 ## Repos
 
@@ -31,7 +31,7 @@ Lokale Klone: `~/gh/degoog/`, `~/gh/degoog-searxng-extensions/`, `~/gh/searxng/`
 │  ┌──────────────────────────▼────────┐  │
 │  │ SearXNG (Python/Flask)            │  │
 │  │ :8888 (intern, 127.0.0.1)        │  │
-│  │ 242+ Engines (107 aktiv)         │  │
+│  │ 335 Engines (107 aktiv)         │  │
 │  └───────────────────────────────────┘  │
 └─────────────────────────────────────────┘
 ```
@@ -49,7 +49,7 @@ Process Management: **supervisord** startet beide Services.
 | `combined/engines/` | SearXNG Engine-Familie für Web, Images, Videos und News |
 | `combined/plugins/searxng-manager/` | Engine Manager Plugin (Web-UI, nur im Fork) |
 | `tools/dg` | CLI Search Tool (fish shell) |
-| `src/client/settings/engines-tab.ts` | Patch: Link zum SearXNG Manager in Engines-Tab |
+| `src/client/settings/engines/tab.ts` | Patch: Link zum SearXNG Manager im modularen Engines-Tab |
 
 ## Store Extension (Upstream-kompatibel)
 
@@ -188,9 +188,9 @@ docker compose -f docker-compose.combined.yml up -d --build
 | `entrypoint.combined.sh` | Neu | Nein |
 | `combined/` | Neu | Nein |
 | `tools/dg` | Neu | Nein |
-| **`src/client/settings/engines-tab.ts`** | **Gepatcht** | **Möglich** — einziger Patch an upstream-Code |
+| **`src/client/settings/engines/tab.ts`** | **Gepatcht** | **Möglich** — aktueller Manager-Link-Patchpunkt in upstream-Code |
 
-Der einzige potenzielle Merge-Konflikt ist `engines-tab.ts` (SearXNG Manager Link am Ende der Funktion `initEnginesTab`). Falls upstream diese Datei ändert, muss der Link-Block manuell re-applied werden — ist ein 15-Zeilen Append, trivial zu lösen.
+Der aktuelle potenzielle Merge-Konflikt liegt im modularen Engines-Tab `src/client/settings/engines/tab.ts`. Zusätzlich müssen bei künftigen Upstream-Updates die tokenlosen Store-Helfer in `src/client/settings/store/lightbox.ts` und `src/client/settings/store/render.ts` gegen mögliche Query-Token-Rückfälle geprüft werden.
 
 **Regel:** Eigene Änderungen immer in separaten Dateien halten. Patches an upstream-Code minimieren.
 

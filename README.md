@@ -142,7 +142,7 @@ https://community-scripts.org/scripts/degoog
 
 ## Combined Mode: degoog + SearXNG
 
-This fork adds a **combined deployment** that runs degoog and [SearXNG](https://github.com/searxng/searxng) in a single Docker container. SearXNG provides 242+ search engines as a headless API backend, while degoog serves as the frontend with its full plugin/theme/extension system.
+This fork adds a **combined deployment** that runs degoog and [SearXNG](https://github.com/searxng/searxng) in a single Docker container. SearXNG currently provides 335 configured engines as a headless API backend, while degoog serves as the frontend with its full plugin/theme/extension system.
 
 ### Architecture
 
@@ -159,7 +159,7 @@ This fork adds a **combined deployment** that runs degoog and [SearXNG](https://
 │  ┌──────────────────────────▼────────┐  │
 │  │ SearXNG (Python/Flask)            │  │
 │  │ :8888 (internal, 127.0.0.1)      │  │
-│  │ 242+ Engines                      │  │
+│  │ 335 configured engines           │  │
 │  └───────────────────────────────────┘  │
 └─────────────────────────────────────────┘
 ```

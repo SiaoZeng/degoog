@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, test } from "bun:test";
-import { screenshotUrl } from "../../src/client/settings/store-lightbox";
+import { screenshotUrl } from "../../src/client/settings/store/lightbox";
+import { repoImageSrc } from "../../src/client/settings/store/render";
 import type { RepoInfo } from "../../src/client/types/store-tab";
 
 const windowStub = {
@@ -9,10 +10,6 @@ const windowStub = {
 
 (globalThis as typeof globalThis & { window: Window & typeof globalThis }).window =
   windowStub;
-
-const { repoImageSrc } = await import(
-  "../../src/client/settings/store/store-tab-render"
-);
 
 beforeEach(() => {
   globalThis.window.__DEGOOG_BASE_URL__ = "/base";
