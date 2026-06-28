@@ -58,4 +58,19 @@ describe("engines registry", () => {
     }
   });
 
+  test("restored direct web engines are discoverable from the tracked combined engines dir", async () => {
+    const orig = process.env.DEGOOG_ENGINES_DIR;
+    process.env.DEGOOG_ENGINES_DIR = new URL("../../combined/engines", import.meta.url).pathname;
+    await initEngines(true);
+    try {
+      const map = getEngineMap();
+      expect(map["degoog-org-official-extensions-duckduckgo-engine"]).toBeDefined();
+      expect(map["degoog-org-official-extensions-brave-engine"]).toBeDefined();
+    } finally {
+      if (orig !== undefined) process.env.DEGOOG_ENGINES_DIR = orig;
+      else process.env.DEGOOG_ENGINES_DIR = "/nonexistent-dir-for-tests";
+      await initEngines(true);
+    }
+  });
+
 });
