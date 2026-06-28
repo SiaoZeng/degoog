@@ -3,7 +3,6 @@ import { screenshotUrl } from "./lightbox";
 import type { RepoInfo, StoreItem } from "../../types/store-tab";
 import { getBase } from "../../utils/base-url";
 import { renderMdInline } from "../../utils/md";
-import { bindingParts } from "../../shortcuts/binding";
 
 const t = (key: string, vars?: Record<string, string> | string[]): string =>
   window.scopedT("core")(key, vars);
@@ -102,7 +101,7 @@ export function renderRepoList(
   selectedUrl: string | null,
 ): string {
   if (!repos.length) {
-    return '<p class="store-empty">No repositories added. Add a git repository URL to browse its plugins, themes, engines, transports and shortcuts.</p>';
+    return '<p class="store-empty">No repositories added. Add a git repository URL to browse its plugins, themes, engines, transports and autocomplete sources.</p>';
   }
   const selected = selectedUrl
     ? repos.find((r) => r.url === selectedUrl)
@@ -130,18 +129,6 @@ export function renderRepoList(
   return html;
 }
 
-export function renderShortcutKeycaps(item: StoreItem): string {
-  if (!item.shortcutBinding) return "";
-  const caps = bindingParts(
-    item.shortcutBinding,
-    item.shortcutKind ?? "single",
-  );
-  if (!caps.length) return "";
-  const keys = caps
-    .map((cap) => `<kbd class="store-keycap">${escapeHtml(cap)}</kbd>`)
-    .join('<span class="store-keycap-plus">+</span>');
-  return `<div class="store-card-thumb store-card-keycaps">${keys}</div>`;
-}
 
 export function renderItemCard(
   item: StoreItem,
@@ -158,11 +145,9 @@ export function renderItemCard(
         token,
       )
     : "";
-  const keycaps = item.type === "shortcut" ? renderShortcutKeycaps(item) : "";
   const thumb = item.screenshots.length
     ? `<img src="${firstUrl}" alt="" class="store-card-thumb" loading="lazy">`
-    : keycaps ||
-      `<div class="store-card-thumb store-card-thumb-placeholder"></div>`;
+    : `<div class="store-card-thumb store-card-thumb-placeholder"></div>`;
   const hasScreenshots = item.screenshots.length > 0;
   const clickableClass = hasScreenshots
     ? " store-card-thumb-wrap--clickable"
@@ -189,10 +174,6 @@ export function renderItemCard(
     subLabel = item.engineType ? engineTypeLabel(item.engineType) : "";
   } else if (item.type === "transport") {
     typeLabel = "Transport";
-  } else if (item.type === "autocomplete") {
-    typeLabel = "Autocomplete";
-  } else if (item.type === "shortcut") {
-    typeLabel = "Shortcut";
   } else {
     typeLabel = "Theme";
   }

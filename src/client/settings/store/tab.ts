@@ -136,15 +136,16 @@ export async function initStoreTab(
       ".store-catalog-grid",
     );
 
+    const visibleItems = items.filter((i) => i.type !== "shortcut");
+
     if (typeSelect) {
       const typeCounts = {
-        all: items.length,
-        plugin: items.filter((i) => i.type === "plugin").length,
-        theme: items.filter((i) => i.type === "theme").length,
-        engine: items.filter((i) => i.type === "engine").length,
-        transport: items.filter((i) => i.type === "transport").length,
-        autocomplete: items.filter((i) => i.type === "autocomplete").length,
-        shortcut: items.filter((i) => i.type === "shortcut").length,
+        all: visibleItems.length,
+        plugin: visibleItems.filter((i) => i.type === "plugin").length,
+        theme: visibleItems.filter((i) => i.type === "theme").length,
+        engine: visibleItems.filter((i) => i.type === "engine").length,
+        transport: visibleItems.filter((i) => i.type === "transport").length,
+        autocomplete: visibleItems.filter((i) => i.type === "autocomplete").length,
       };
       typeSelect.innerHTML = [
         { id: "all", label: "Extensions", count: typeCounts.all },
@@ -153,7 +154,6 @@ export async function initStoreTab(
         { id: "engine", label: "Engines", count: typeCounts.engine },
         { id: "transport", label: "Transports", count: typeCounts.transport },
         { id: "autocomplete", label: "Autocomplete", count: typeCounts.autocomplete },
-        { id: "shortcut", label: "Shortcuts", count: typeCounts.shortcut },
       ]
         .map(
           (t) =>
@@ -167,14 +167,14 @@ export async function initStoreTab(
       };
     }
 
-    const subtypes = collectSubtypes(items, typeFilter);
+    const subtypes = collectSubtypes(visibleItems, typeFilter);
     if (subtypeSelect) {
       if (subtypes.length === 0) {
         subtypeSelect.style.display = "none";
         subtypeSelect.innerHTML = "";
       } else {
         subtypeSelect.style.display = "";
-        const filteredForType = items.filter((i) => i.type === typeFilter);
+        const filteredForType = visibleItems.filter((i) => i.type === typeFilter);
         subtypeSelect.innerHTML = [
           { id: "all", label: "All", count: filteredForType.length },
           ...subtypes.map((id) => ({
@@ -203,11 +203,11 @@ export async function initStoreTab(
     }
 
     if (statusSelect) {
-      const installed = items.filter((i) => i.installed).length;
+      const installed = visibleItems.filter((i) => i.installed).length;
       statusSelect.innerHTML = [
-        { id: "all", label: "All", count: items.length },
+        { id: "all", label: "All", count: visibleItems.length },
         { id: "installed", label: "Installed", count: installed },
-        { id: "not-installed", label: "Not Installed", count: items.length - installed },
+        { id: "not-installed", label: "Not Installed", count: visibleItems.length - installed },
       ]
         .map(
           (s) =>
@@ -222,7 +222,7 @@ export async function initStoreTab(
 
     if (grid) {
       const filtered = filterItems(
-        items,
+        visibleItems,
         typeFilter,
         subtypeFilter,
         searchQuery,
