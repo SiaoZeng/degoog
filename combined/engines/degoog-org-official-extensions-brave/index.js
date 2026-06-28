@@ -3,6 +3,8 @@ import * as cheerio from "cheerio";
 const FALLBACK_UA = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36";
 
 const BASE_URL = "https://search.brave.com/";
+const SEARXNG_SAFESEARCH_MAP = { off: "0", moderate: "1", strict: "2" };
+
 const TIME_RANGE_MAP = { day: "pd", week: "pw", month: "pm", year: "py" };
 
 const _cookie = (lang, safeSearch) => {
@@ -30,6 +32,14 @@ export default class BraveEngine {
       default: "moderate",
       description: "Filter explicit content from search results.",
     },
+    {
+      key: "outgoingTransport",
+      label: "Outgoing HTTP client",
+      type: "select",
+      options: ["fetch", "curl", "curl-impersonate", "curl-fallback"],
+      default: "curl-impersonate",
+      description: "The outgoing HTTP client to use for this engine.",
+    },
   ];
 
   configure(settings) {
@@ -44,7 +54,7 @@ export default class BraveEngine {
     }
     const url = `${BASE_URL}search?${new URLSearchParams(args).toString()}`;
     const doFetch = context?.fetch ?? fetch;
-    const response = await doFetch(url, {
+    let response = await doFetch(url, {
       headers: {
         "User-Agent": context?.userAgent?.() ?? FALLBACK_UA,
         "Accept-Encoding": "gzip, deflate",
@@ -54,6 +64,39 @@ export default class BraveEngine {
       },
       redirect: "follow",
     });
+    if (response.status === 429) {
+      const localBase =
+        process.env.SEARXNG_BASE_URL?.trim() ||
+        `http://127.0.0.1:${process.env.SEARXNG_PORT?.trim() || "8888"}`;
+      const fallbackParams = new URLSearchParams({
+        q: query,
+        format: "json",
+        pageno: String(page || 1),
+        categories: "general",
+        engines: "brave",
+        safesearch: SEARXNG_SAFESEARCH_MAP[this.safeSearch] || "1",
+      });
+      if (context?.lang) fallbackParams.set("language", context.lang);
+      if (timeFilter && timeFilter !== "any" && timeFilter !== "custom") {
+        fallbackParams.set("time_range", timeFilter);
+      }
+      const fallback = await fetch(`${localBase}/search?${fallbackParams.toString()}`);
+      const payload = await fallback.json();
+      const items = Array.isArray(payload?.results) ? payload.results : [];
+      return items
+        .filter((item) =>
+          (Array.isArray(item?.sources) && item.sources.some((src) => src === "SearXNG:brave")) ||
+          item?.source === "SearXNG:brave",
+        )
+        .map((item) => ({
+          title: item.title,
+          url: item.url,
+          snippet: item.snippet ?? item.content ?? "",
+          source: this.name,
+          ...(item.thumbnail ? { thumbnail: item.thumbnail } : {}),
+        }))
+        .filter((item) => item.title && item.url);
+    }
     context?.sentinel?.(response, this.name);
 
     const html = await response.text();

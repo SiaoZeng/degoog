@@ -34,6 +34,14 @@ export default class DuckDuckGoEngine {
       options: ["off", "moderate", "strict"],
       description: "Filter explicit content from search results.",
     },
+    {
+      key: "outgoingTransport",
+      label: "Outgoing HTTP client",
+      type: "select",
+      options: ["fetch", "curl", "curl-impersonate", "curl-fallback"],
+      default: "curl-impersonate",
+      description: "The outgoing HTTP client to use for this engine.",
+    },
   ];
 
   configure(settings) {
