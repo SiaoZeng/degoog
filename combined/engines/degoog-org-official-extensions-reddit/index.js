@@ -1,6 +1,8 @@
 const BASE_URL = "https://www.reddit.com/search.rss";
 const SEARCH_LIMIT = 25;
 const FALLBACK_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:134.0) Gecko/20100101 Firefox/134.0";
+const REDDIT_HOST_RE = /(^|\\.)reddit\\.com$/i;
+
 
 const _decodeEntities = (str) =>
   str
@@ -97,6 +99,40 @@ export default class RedditEngine {
         "Accept-Language": context?.buildAcceptLanguage?.() || "en-US,en;q=0.9",
       },
     });
+
+    if (response.status === 429) {
+      const localBase =
+        process.env.SEARXNG_BASE_URL?.trim() ||
+        `http://127.0.0.1:${process.env.SEARXNG_PORT?.trim() || "8888"}`;
+      const fallbackParams = new URLSearchParams({
+        q: `site:reddit.com ${query}`,
+        format: "json",
+        pageno: String(page || 1),
+        categories: "general",
+      });
+      if (context?.lang) fallbackParams.set("language", context.lang);
+      if (timeFilter && timeFilter !== "any" && timeFilter !== "custom") {
+        fallbackParams.set("time_range", timeFilter);
+      }
+      const fallback = await fetch(`${localBase}/search?${fallbackParams.toString()}`);
+      const payload = await fallback.json();
+      const items = Array.isArray(payload?.results) ? payload.results : [];
+      return items
+        .filter((item) => {
+          try {
+            return REDDIT_HOST_RE.test(new URL(item.url).hostname);
+          } catch {
+            return false;
+          }
+        })
+        .map((item) => ({
+          title: item.title,
+          url: item.url,
+          snippet: item.snippet ?? item.content ?? "",
+          source: this.name,
+        }))
+        .filter((item) => item.title && item.url);
+    }
 
     context?.sentinel?.(response, this.name);
 

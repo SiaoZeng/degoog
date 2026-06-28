@@ -82,12 +82,29 @@ export default class BraveEngine {
       }
       const fallback = await fetch(`${localBase}/search?${fallbackParams.toString()}`);
       const payload = await fallback.json();
-      const items = Array.isArray(payload?.results) ? payload.results : [];
+      let items = Array.isArray(payload?.results) ? payload.results : [];
+      items = items.filter((item) =>
+        (Array.isArray(item?.sources) &&
+          item.sources.some((src) => src === "SearXNG:brave")) ||
+        item?.source === "SearXNG:brave",
+      );
+      if (items.length === 0) {
+        const broadParams = new URLSearchParams({
+          q: query,
+          format: "json",
+          pageno: String(page || 1),
+          categories: "general",
+          safesearch: SEARXNG_SAFESEARCH_MAP[this.safeSearch] || "1",
+        });
+        if (context?.lang) broadParams.set("language", context.lang);
+        if (timeFilter && timeFilter !== "any" && timeFilter !== "custom") {
+          broadParams.set("time_range", timeFilter);
+        }
+        const broad = await fetch(`${localBase}/search?${broadParams.toString()}`);
+        const broadPayload = await broad.json();
+        items = Array.isArray(broadPayload?.results) ? broadPayload.results : [];
+      }
       return items
-        .filter((item) =>
-          (Array.isArray(item?.sources) && item.sources.some((src) => src === "SearXNG:brave")) ||
-          item?.source === "SearXNG:brave",
-        )
         .map((item) => ({
           title: item.title,
           url: item.url,
