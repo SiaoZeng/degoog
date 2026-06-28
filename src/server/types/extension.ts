@@ -110,6 +110,7 @@ export interface PluginContext {
 export interface SearchEngine {
   name: string;
   bangShortcut?: string;
+  timeoutMs?: number;
   settingsSchema?: SettingField[];
   configure?(settings: Record<string, SettingValue>): void;
   executeSearch(

@@ -38,10 +38,17 @@ const ENGINE_TIMEOUT_MS = 10_000;
 
 const ENGINE_TIMEOUT_BUFFER_MS = 5000;
 
-const _getEngineTimeout = async (
+export const resolveEngineTimeout = async (
   engineSettingsId: string | undefined,
+  engine?: SearchEngine,
 ): Promise<number> => {
-  if (!engineSettingsId) return ENGINE_TIMEOUT_MS;
+  let timeout = ENGINE_TIMEOUT_MS;
+  if (!engineSettingsId) {
+    if (engine?.timeoutMs && engine.timeoutMs > ENGINE_TIMEOUT_MS) {
+      timeout = engine.timeoutMs + ENGINE_TIMEOUT_BUFFER_MS;
+    }
+    return timeout;
+  }
   let raw =
     asString((await getSettings(engineSettingsId)).outgoingTransport) ||
     undefined;
@@ -49,9 +56,12 @@ const _getEngineTimeout = async (
   const transportName = parseOutgoingTransport(raw);
   const transport = resolveTransport(transportName);
   if (transport.timeoutMs && transport.timeoutMs > ENGINE_TIMEOUT_MS) {
-    return transport.timeoutMs + ENGINE_TIMEOUT_BUFFER_MS;
+    timeout = transport.timeoutMs + ENGINE_TIMEOUT_BUFFER_MS;
   }
-  return ENGINE_TIMEOUT_MS;
+  if (engine?.timeoutMs && engine.timeoutMs > ENGINE_TIMEOUT_MS) {
+    timeout = Math.max(timeout, engine.timeoutMs + ENGINE_TIMEOUT_BUFFER_MS);
+  }
+  return timeout;
 };
 
 const _TRACKING_PARAMS = new Set([
@@ -360,7 +370,7 @@ export const searchSingleEngine = async (
     ac.signal,
   );
   try {
-    const timeout = await _getEngineTimeout(engineSettingsId);
+    const timeout = await resolveEngineTimeout(engineSettingsId, engine);
     const results = await _withTimeout(
       engine.executeSearch(query, p, timeFilter, engineContext),
       timeout,
@@ -420,7 +430,7 @@ export const search = async (
         imageFilter,
         ac.signal,
       );
-      const timeout = await _getEngineTimeout(id);
+      const timeout = await resolveEngineTimeout(id, instance);
       const results = await _withTimeout(
         instance.executeSearch(query, p, timeFilter, ctx),
         timeout,
